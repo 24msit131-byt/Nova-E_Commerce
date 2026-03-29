@@ -24,6 +24,7 @@ import AddProduct from "./pages/Admin/ManageProducts/AddProduct";
 import UpdateProduct from "./pages/Admin/ManageProducts/UpdateProduct";
 import OrderDetails from "./pages/Admin/ManageOrders/OrderDetails";
 import Banner from "./pages/Admin/Banner/Banner";
+import PromoCode from "./pages/Admin/PromoCode/promoCode";
 
 
 
@@ -63,6 +64,8 @@ export default function App() {
         <Route path="/admin/update-product/:id" element={<UpdateProduct />} />
         <Route path="/admin/order-details/:id" element={<OrderDetails />} />
         <Route path="/admin/banner" element={<Banner />} />
+        <Route path="/admin/promo-code" element={<PromoCode />} />
+        <Route path="/admin/promoCode" element={<PromoCode />} />
 
       </Routes>
     </div>

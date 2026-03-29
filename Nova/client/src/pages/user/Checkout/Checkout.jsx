@@ -15,6 +15,7 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState('razorpay');
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayScriptLoaded, setRazorpayScriptLoaded] = useState(false);
+    const [appliedPromo, setAppliedPromo] = useState(null);
     const [shippingDetails, setShippingDetails] = useState({
         fullName: '',
         addressLine: '',
@@ -53,6 +54,21 @@ const Checkout = () => {
         };
 
         loadRazorpay();
+    }, []);
+
+    useEffect(() => {
+        const savedPromo = localStorage.getItem('appliedPromo');
+
+        if (!savedPromo) return;
+
+        try {
+            const parsedPromo = JSON.parse(savedPromo);
+            if (parsedPromo?.code && typeof parsedPromo.discount === 'number') {
+                setAppliedPromo(parsedPromo);
+            }
+        } catch (error) {
+            localStorage.removeItem('appliedPromo');
+        }
     }, []);
 
     useEffect(() => {
@@ -97,7 +113,8 @@ const Checkout = () => {
     const subtotal = cartTotal;
     const shipping = subtotal >= 1000 || subtotal === 0 ? 0 : 50;
     const gst = subtotal > 0 ? subtotal * 0.18 : 0;
-    const total = subtotal + shipping + gst;
+    const promoDiscount = appliedPromo?.discount || 0;
+    const total = subtotal + shipping + gst - promoDiscount;
 
     const handleShippingChange = (e) => {
         const { name, value } = e.target;
@@ -112,6 +129,8 @@ const Checkout = () => {
             price: item.product?.price,
             product: item.product?._id
         })),
+        promoCode: appliedPromo?.code || '',
+        promoDiscount,
         shippingAddress: {
             address: shippingDetails.addressLine,
             city: shippingDetails.city || shippingDetails.district,
@@ -182,6 +201,7 @@ const Checkout = () => {
                     });
 
                     await clearCart();
+                    localStorage.removeItem('appliedPromo');
                     toast.success('Payment successful and order confirmed!');
                     navigate('/');
                 } catch (error) {
@@ -217,6 +237,7 @@ const Checkout = () => {
 
         if (response.data.success) {
             await clearCart();
+            localStorage.removeItem('appliedPromo');
             toast.success('Order placed successfully!');
             navigate('/');
         }
@@ -376,6 +397,12 @@ const Checkout = () => {
                                     <span>Est. Taxation (18%)</span>
                                     <span style={{ color: colors.textMain }}>₹{gst.toFixed(2)}</span>
                                 </div>
+                                {appliedPromo && (
+                                    <div className="flex justify-between text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: colors.primary }}>
+                                        <span>Promo Discount</span>
+                                        <span>- ₹{promoDiscount.toFixed(2)}</span>
+                                    </div>
+                                )}
                                 <div className="pt-8 border-t border-dashed flex justify-between items-end" style={{ borderColor: colors.accent }}>
                                     <span className="text-sm font-black uppercase tracking-[0.3em]" style={{ color: colors.textMain }}>Total Due</span>
                                     <span className="text-4xl font-black tracking-tighter" style={{ color: colors.primary }}>₹{total.toFixed(2)}</span>

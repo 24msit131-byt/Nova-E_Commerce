@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
+import PromoCode from '../models/PromoCode.js';
 import Product from '../models/Product.js';
 
 const rollbackStock = async (updatedItems) => {
@@ -99,6 +100,38 @@ const verifyRazorpaySignature = ({ razorpayOrderId, razorpayPaymentId, razorpayS
     return expectedSignature === razorpaySignature;
 };
 
+const incrementPromoUsage = async (promoCodeValue) => {
+    if (!promoCodeValue) return;
+
+    const promoCode = await PromoCode.findOne({ code: promoCodeValue.toUpperCase() });
+
+    if (!promoCode) return;
+
+    if (promoCode.status !== 'Active') return;
+
+    if (promoCode.expiresAt && new Date(promoCode.expiresAt) < new Date()) return;
+
+    if (promoCode.usageLimit > 0 && promoCode.usageCount >= promoCode.usageLimit) {
+        await PromoCode.updateOne(
+            { _id: promoCode._id, status: 'Active' },
+            { $set: { status: 'Inactive' } }
+        );
+        return;
+    }
+
+    const nextUsageCount = Number(promoCode.usageCount || 0) + 1;
+    const update = { $inc: { usageCount: 1 } };
+
+    if (promoCode.usageLimit > 0 && nextUsageCount >= promoCode.usageLimit) {
+        update.$set = { status: 'Inactive' };
+    }
+
+    await PromoCode.updateOne(
+        { _id: promoCode._id },
+        update
+    );
+};
+
 // @desc    Create new order
 // @route   POST /api/v1/orders
 // @access  Private
@@ -110,7 +143,9 @@ export const createOrder = async (req, res) => {
             paymentMethod,
             taxPrice,
             shippingPrice,
-            totalPrice
+            totalPrice,
+            promoCode,
+            promoDiscount
         } = req.body;
 
         if (!orderItems || orderItems.length === 0) {
@@ -129,6 +164,8 @@ export const createOrder = async (req, res) => {
             paymentMethod,
             taxPrice,
             shippingPrice,
+            promoCode: promoCode || '',
+            promoDiscount: Number(promoDiscount || 0),
             totalPrice
         });
 
@@ -139,6 +176,12 @@ export const createOrder = async (req, res) => {
         } catch (error) {
             await restoreStockForOrder(orderItems);
             throw error;
+        }
+
+        try {
+            await incrementPromoUsage(createdOrder.promoCode);
+        } catch (promoError) {
+            console.error('Failed to record promo usage for COD order:', promoError);
         }
 
         res.status(201).json({
@@ -163,7 +206,9 @@ export const createRazorpayOrder = async (req, res) => {
             shippingAddress,
             taxPrice,
             shippingPrice,
-            totalPrice
+            totalPrice,
+            promoCode,
+            promoDiscount
         } = req.body;
 
         if (!orderItems || orderItems.length === 0) {
@@ -185,6 +230,8 @@ export const createRazorpayOrder = async (req, res) => {
             paymentGateway: 'Razorpay',
             taxPrice,
             shippingPrice,
+            promoCode: promoCode || '',
+            promoDiscount: Number(promoDiscount || 0),
             totalPrice,
             isPaid: false,
             status: 'Processing'
@@ -304,6 +351,12 @@ export const verifyRazorpayPayment = async (req, res) => {
         order.paymentMethod = 'Razorpay';
 
         await order.save();
+
+        try {
+            await incrementPromoUsage(order.promoCode);
+        } catch (promoError) {
+            console.error('Failed to record promo usage for Razorpay order:', promoError);
+        }
 
         res.status(200).json({
             success: true,

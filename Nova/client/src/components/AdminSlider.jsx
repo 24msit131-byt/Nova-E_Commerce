@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaChartPie, FaBoxOpen, FaUsersCog, FaClipboardList, FaSignOutAlt, FaImages } from 'react-icons/fa';
+import { FaChartPie, FaBoxOpen, FaUsersCog, FaClipboardList, FaSignOutAlt, FaImages, FaCodepen } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
 const AdminSidebar = () => {
@@ -24,6 +24,7 @@ const AdminSidebar = () => {
         { name: 'Orders', path: '/admin/orders', icon: <FaClipboardList /> },
         { name: 'Users', path: '/admin/users', icon: <FaUsersCog /> },
         { name: 'banner', path: '/admin/banner', icon: <FaImages /> },
+        { name: 'Promos', path: '/admin/promo-code', icon: <FaCodepen /> },
     ];
 
     /*const handleLogout = () => {

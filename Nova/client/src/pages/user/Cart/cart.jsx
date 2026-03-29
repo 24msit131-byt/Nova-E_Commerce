@@ -53,6 +53,21 @@ const Cart = () => {
     const gst = subtotal > 0 ? (subtotal * 0.18) : 0;
     const total = subtotal + shipping + gst - discount;
 
+    useEffect(() => {
+        const savedPromo = localStorage.getItem('appliedPromo');
+
+        if (!savedPromo) return;
+
+        try {
+            const parsedPromo = JSON.parse(savedPromo);
+            if (parsedPromo?.code && typeof parsedPromo.discount === 'number') {
+                setAppliedPromo(parsedPromo);
+            }
+        } catch (error) {
+            localStorage.removeItem('appliedPromo');
+        }
+    }, []);
+
     const handleQuantityChange = (productId, currentQty, delta) => {
         const newQty = currentQty + delta;
         if (newQty >= 1) updateQuantity(productId, newQty);
@@ -158,16 +173,30 @@ const Cart = () => {
         }
     };
 
-    // --- Promo Logic Handler (Logic preserved) ---
-    const applyPromoCode = () => {
+    // --- Promo Logic Handler ---
+    const applyPromoCode = async () => {
         setPromoError("");
-        if (promoInput.toUpperCase() === 'NOVA10') {
-            setAppliedPromo({ code: 'NOVA10', discount: 150 });
-            setPromoInput("");
-        } else if (promoInput === "") {
+        if (promoInput.trim() === "") {
             setPromoError("Please enter a code.");
-        } else {
-            setPromoError("Invalid or expired code.");
+            return;
+        }
+
+        try {
+            const { data } = await api.post('/promos/validate', { 
+                code: promoInput,
+                subtotal 
+            });
+
+            if (data.success) {
+                const promo = { code: data.code, discount: data.discountAmount };
+                setAppliedPromo(promo);
+                localStorage.setItem('appliedPromo', JSON.stringify(promo));
+                setPromoInput("");
+            }
+        } catch (err) {
+            setPromoError(err.response?.data?.message || "Invalid or expired code.");
+            setAppliedPromo(null);
+            localStorage.removeItem('appliedPromo');
         }
     };
 
@@ -289,7 +318,10 @@ const Cart = () => {
                                                         <FaCheckCircle style={{ color: colors.success }} />
                                                         <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: colors.success }}>{appliedPromo.code} Active</span>
                                                     </div>
-                                                    <button onClick={() => setAppliedPromo(null)} className="text-[9px] font-black uppercase opacity-40 hover:opacity-100 transition-opacity">Remove</button>
+                                                    <button onClick={() => {
+                                                        setAppliedPromo(null);
+                                                        localStorage.removeItem('appliedPromo');
+                                                    }} className="text-[9px] font-black uppercase opacity-40 hover:opacity-100 transition-opacity">Remove</button>
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>

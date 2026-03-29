@@ -9,6 +9,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import bannerRoutes from './routes/bannerRoutes.js';
+import promoCodeRoutes from './routes/promoCodeRoutes.js';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/banner', bannerRoutes);
+app.use('/api/v1/promos', promoCodeRoutes);
 
 app.get("/", (req, res) => {
 	res.send(
