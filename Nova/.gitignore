@@ -1,0 +1,72 @@
+# ------------------------------
+# Dependencies
+# ------------------------------
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Package manager caches
+.pnpm-store/
+.npm/
+.yarn/
+.pnp
+.pnp.js
+
+# ------------------------------
+# Build and coverage outputs
+# ------------------------------
+dist/
+build/
+coverage/
+client/dist/
+server/dist/
+
+# Vite cache
+client/.vite/
+
+# ------------------------------
+# Environment and secrets
+# ------------------------------
+.env
+.env.*
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+!.env.example
+!client/.env.example
+!server/.env.example
+
+# ------------------------------
+# Runtime and uploaded assets
+# ------------------------------
+server/uploads/*
+!server/uploads/.gitkeep
+
+# ------------------------------
+# Logs
+# ------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------
+# OS and editor files
+# ------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# ------------------------------
+# Optional temp files
+# ------------------------------
+*.tmp
+*.temp

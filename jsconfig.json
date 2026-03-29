@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",
+    "baseUrl": "."
+  },
+  "include": ["Nova/**/*"],
+  "exclude": ["**/node_modules", "**/dist", "**/build"]
+}

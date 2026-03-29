@@ -1,0 +1,522 @@
+import crypto from 'crypto';
+import Razorpay from 'razorpay';
+import Order from '../models/Order.js';
+import Product from '../models/Product.js';
+
+const rollbackStock = async (updatedItems) => {
+    if (!updatedItems.length) return;
+
+    await Product.bulkWrite(
+        updatedItems.map((item) => ({
+            updateOne: {
+                filter: { _id: item.productId },
+                update: { $inc: { stock: item.qty } }
+            }
+        }))
+    );
+};
+
+const reserveStockForOrder = async (orderItems) => {
+    const updatedItems = [];
+
+    for (const item of orderItems) {
+        const qty = Number(item.qty);
+
+        if (!item.product || Number.isNaN(qty) || qty <= 0) {
+            await rollbackStock(updatedItems);
+            throw new Error(`Invalid order quantity for ${item.name || 'an item'}`);
+        }
+
+        const updatedProduct = await Product.findOneAndUpdate(
+            { _id: item.product, stock: { $gte: qty } },
+            { $inc: { stock: -qty } },
+            { new: true }
+        );
+
+        if (!updatedProduct) {
+            await rollbackStock(updatedItems);
+
+            const existingProduct = await Product.findById(item.product).select('name');
+            const productName = existingProduct?.name || item.name || 'Product';
+            throw new Error(`${productName} is out of stock or has insufficient quantity`);
+        }
+
+        updatedItems.push({ productId: item.product, qty });
+    }
+};
+
+const restoreStockForOrder = async (orderItems) => {
+    const stockUpdates = [];
+
+    for (const item of orderItems) {
+        const qty = Number(item.qty);
+
+        if (!item.product || Number.isNaN(qty) || qty <= 0) {
+            continue;
+        }
+
+        stockUpdates.push({
+            updateOne: {
+                filter: { _id: item.product },
+                update: { $inc: { stock: qty } }
+            }
+        });
+    }
+
+    if (stockUpdates.length) {
+        await Product.bulkWrite(stockUpdates);
+    }
+};
+
+const getRazorpayConfig = () => {
+    const keyId = String(process.env.RAZORPAY_KEY_ID || '').trim();
+    const keySecret = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
+
+    if (!keyId || !keySecret) {
+        throw new Error('Razorpay is not configured on the server');
+    }
+
+    return { keyId, keySecret };
+};
+
+const createRazorpayClient = () => {
+    const { keyId, keySecret } = getRazorpayConfig();
+
+    return new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret
+    });
+};
+
+const verifyRazorpaySignature = ({ razorpayOrderId, razorpayPaymentId, razorpaySignature }) => {
+    const { keySecret } = getRazorpayConfig();
+
+    const expectedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
+
+    return expectedSignature === razorpaySignature;
+};
+
+// @desc    Create new order
+// @route   POST /api/v1/orders
+// @access  Private
+export const createOrder = async (req, res) => {
+    try {
+        const {
+            orderItems,
+            shippingAddress,
+            paymentMethod,
+            taxPrice,
+            shippingPrice,
+            totalPrice
+        } = req.body;
+
+        if (!orderItems || orderItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No order items'
+            });
+        }
+
+        await reserveStockForOrder(orderItems);
+
+        const order = new Order({
+            user: req.user._id,
+            orderItems,
+            shippingAddress,
+            paymentMethod,
+            taxPrice,
+            shippingPrice,
+            totalPrice
+        });
+
+        let createdOrder;
+
+        try {
+            createdOrder = await order.save();
+        } catch (error) {
+            await restoreStockForOrder(orderItems);
+            throw error;
+        }
+
+        res.status(201).json({
+            success: true,
+            data: createdOrder
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Create Razorpay payment order
+// @route   POST /api/v1/orders/razorpay/create
+// @access  Private
+export const createRazorpayOrder = async (req, res) => {
+    try {
+        const {
+            orderItems,
+            shippingAddress,
+            taxPrice,
+            shippingPrice,
+            totalPrice
+        } = req.body;
+
+        if (!orderItems || orderItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No order items'
+            });
+        }
+
+        const razorpayClient = createRazorpayClient();
+
+        await reserveStockForOrder(orderItems);
+
+        const pendingOrder = new Order({
+            user: req.user._id,
+            orderItems,
+            shippingAddress,
+            paymentMethod: 'Razorpay',
+            paymentGateway: 'Razorpay',
+            taxPrice,
+            shippingPrice,
+            totalPrice,
+            isPaid: false,
+            status: 'Processing'
+        });
+
+        let createdOrder;
+
+        try {
+            createdOrder = await pendingOrder.save();
+        } catch (error) {
+            await restoreStockForOrder(orderItems);
+            throw error;
+        }
+
+        let razorpayOrder;
+
+        try {
+            razorpayOrder = await razorpayClient.orders.create({
+                amount: Math.round(Number(totalPrice || 0) * 100),
+                currency: 'INR',
+                receipt: `order_${createdOrder._id}`,
+                notes: {
+                    orderId: String(createdOrder._id),
+                    userId: String(req.user._id)
+                }
+            });
+        } catch (error) {
+            await restoreStockForOrder(orderItems);
+            await Order.findByIdAndDelete(createdOrder._id);
+            throw error;
+        }
+
+        createdOrder.razorpayOrderId = razorpayOrder.id;
+
+        try {
+            await createdOrder.save({ validateBeforeSave: false });
+        } catch (error) {
+            await restoreStockForOrder(orderItems);
+            await Order.findByIdAndDelete(createdOrder._id);
+            throw error;
+        }
+
+        res.status(201).json({
+            success: true,
+            data: {
+                order: createdOrder,
+                razorpayOrder,
+                keyId: String(process.env.RAZORPAY_KEY_ID || '').trim()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Verify Razorpay payment
+// @route   POST /api/v1/orders/razorpay/verify
+// @access  Private
+export const verifyRazorpayPayment = async (req, res) => {
+    try {
+        const {
+            orderId,
+            razorpay_order_id: razorpayOrderId,
+            razorpay_payment_id: razorpayPaymentId,
+            razorpay_signature: razorpaySignature
+        } = req.body;
+
+        if (!orderId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing Razorpay payment details'
+            });
+        }
+
+        const order = await Order.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        if (String(order.user) !== String(req.user._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not allowed to verify this order'
+            });
+        }
+
+        if (order.razorpayOrderId && order.razorpayOrderId !== razorpayOrderId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Razorpay order mismatch'
+            });
+        }
+
+        if (!verifyRazorpaySignature({ razorpayOrderId, razorpayPaymentId, razorpaySignature })) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Razorpay payment signature'
+            });
+        }
+
+        order.isPaid = true;
+        order.paidAt = Date.now();
+        order.paymentResult = {
+            id: razorpayPaymentId,
+            status: 'captured',
+            update_time: new Date().toISOString(),
+            email_address: req.user.email
+        };
+        order.razorpayOrderId = razorpayOrderId;
+        order.paymentMethod = 'Razorpay';
+
+        await order.save();
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Cancel pending Razorpay payment order
+// @route   POST /api/v1/orders/razorpay/cancel
+// @access  Private
+export const cancelRazorpayPayment = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+
+        if (!orderId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        const order = await Order.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        if (String(order.user) !== String(req.user._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not allowed to cancel this order'
+            });
+        }
+
+        if (order.isPaid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Paid orders cannot be cancelled here'
+            });
+        }
+
+        await restoreStockForOrder(order.orderItems);
+        await Order.findByIdAndDelete(order._id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Pending Razorpay order cancelled'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Get logged-in user's orders
+// @route   GET /api/v1/orders/my
+// @access  Private
+export const getMyOrders = async (req, res) => {
+    try {
+        const orders = await Order.find({ user: req.user._id })
+            .sort({ createdAt: -1 })
+            .populate('orderItems.product', 'name');
+
+        res.status(200).json({
+            success: true,
+            count: orders.length,
+            data: orders
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Get all orders for admin
+// @route   GET /api/v1/orders/admin
+// @access  Private/Admin
+export const getAdminOrders = async (req, res) => {
+    try {
+        const orders = await Order.find()
+            .sort({ createdAt: -1 })
+            .populate('user', 'fullName email');
+
+        res.status(200).json({
+            success: true,
+            count: orders.length,
+            data: orders
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Update order status
+// @route   PATCH /api/v1/orders/:id/status
+// @access  Private/Admin
+export const updateOrderStatus = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        const { status } = req.body;
+        const previousStatus = order.status;
+
+        if (previousStatus !== 'Cancelled' && status === 'Cancelled') {
+            await restoreStockForOrder(order.orderItems);
+        }
+
+        order.status = status;
+
+        if (status === 'Delivered') {
+            order.isDelivered = true;
+            order.deliveredAt = Date.now();
+            if (String(order.paymentMethod).toLowerCase() === 'cod') {
+                order.isPaid = true;
+                order.paidAt = Date.now();
+            }
+        } else if (status === 'Shipped') {
+            order.isShipped = true;
+            order.shippedAt = Date.now();
+        }
+
+        await order.save();
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Update order details (trackingId, adminNotes)
+// @route   PATCH /api/v1/orders/:id/details
+// @access  Private/Admin
+export const updateOrderDetails = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        const { trackingId, adminNotes } = req.body;
+
+        if (trackingId !== undefined) order.trackingId = trackingId;
+        if (adminNotes !== undefined) order.adminNotes = adminNotes;
+
+        await order.save();
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Get order by ID
+// @route   GET /api/v1/orders/:id
+// @access  Private/Admin
+export const getOrderById = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id).populate('user', 'fullName email phoneNumber');
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

@@ -1,0 +1,77 @@
+# ------------------------------
+# Dependencies
+# ------------------------------
+node_modules/
+**/node_modules/
+
+# Package manager caches
+.pnpm-store/
+.npm/
+.yarn/
+.pnp
+.pnp.js
+
+# ------------------------------
+# Build and coverage outputs
+# ------------------------------
+dist/
+build/
+coverage/
+**/.vite/
+Nova/client/.vite/
+
+# ------------------------------
+# Environment and secrets
+# ------------------------------
+.env
+.env.*
+Nova/.env
+Nova/.env.*
+Nova/client/.env
+Nova/client/.env.*
+Nova/server/.env
+Nova/server/.env.*
+!.env.example
+!Nova/.env.example
+!Nova/client/.env.example
+!Nova/server/.env.example
+
+# ------------------------------
+# Runtime and uploaded assets
+# ------------------------------
+Nova/server/uploads/*
+!Nova/server/uploads/.gitkeep
+
+# ------------------------------
+# Logs
+# ------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------
+# OS and editor files
+# ------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# ------------------------------
+# Optional temp files
+# ------------------------------
+*.tmp
+*.temp
+*.swp
+*.swo
+*.pid
+*.pid.lock
+*.tsbuildinfo
+.eslintcache
