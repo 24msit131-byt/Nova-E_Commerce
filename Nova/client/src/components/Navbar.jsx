@@ -5,6 +5,7 @@ import { HiOutlineSearch, HiOutlineLogout, HiOutlineViewGrid } from 'react-icons
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
+import api from '../services/api.js';
 
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -12,6 +13,8 @@ const Navbar = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchSuggestions, setSearchSuggestions] = useState([]);
+    const [searchProducts, setSearchProducts] = useState([]);
     const { user, logout } = useContext(AuthContext);
     const { cartCount } = useCart();
     const navigate = useNavigate();
@@ -28,6 +31,52 @@ const Navbar = () => {
         setUserMenuOpen(false);
     }, [location]);
 
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchSearchProducts = async () => {
+            try {
+                const response = await api.get('/products');
+                if (isMounted) {
+                    setSearchProducts(response.data?.data || []);
+                }
+            } catch (error) {
+                console.error('Navbar search load error:', error?.response?.data || error.message);
+            }
+        };
+
+        fetchSearchProducts();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        const query = searchTerm.trim().toLowerCase();
+
+        if (!showSearch || !query) {
+            setSearchSuggestions([]);
+            return;
+        }
+
+        const matchedProducts = searchProducts
+            .filter((product) => {
+                const name = String(product.name || '').toLowerCase();
+                const category = String(product.category || '').toLowerCase();
+                const description = String(product.description || '').toLowerCase();
+
+                return (
+                    name.includes(query) ||
+                    category.includes(query) ||
+                    description.includes(query)
+                );
+            })
+            .slice(0, 5);
+
+        setSearchSuggestions(matchedProducts);
+    }, [showSearch, searchTerm, searchProducts]);
+
     const handleLogout = () => {
         logout();
         navigate('/');
@@ -39,7 +88,15 @@ const Navbar = () => {
             navigate(`/products?search=${encodeURIComponent(searchTerm.trim())}`);
             setShowSearch(false);
             setSearchTerm('');
+            setSearchSuggestions([]);
         }
+    };
+
+    const handleSuggestionClick = (productId) => {
+        setShowSearch(false);
+        setSearchTerm('');
+        setSearchSuggestions([]);
+        navigate(`/product/${productId}`);
     };
 
     // Theme Color Constants
@@ -114,27 +171,76 @@ const Navbar = () => {
                         <div className="relative flex items-center">
                             <AnimatePresence>
                                 {showSearch && (
-                                    <motion.form
+                                    <motion.div
                                         initial={{ width: 0, opacity: 0 }}
                                         animate={{ width: 240, opacity: 1 }}
                                         exit={{ width: 0, opacity: 0 }}
-                                        onSubmit={handleSearchSubmit}
-                                        className="overflow-hidden mr-2"
+                                        className="relative overflow-visible mr-2"
                                     >
-                                        <input
-                                            type="text"
-                                            placeholder="Pure home products..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full border rounded-full py-1.5 px-4 text-sm outline-none transition-all font-medium"
-                                            style={{
-                                                backgroundColor: colors.neutralLight,
-                                                borderColor: colors.accent,
-                                                color: colors.textMain
-                                            }}
-                                            autoFocus
-                                        />
-                                    </motion.form>
+                                        <form onSubmit={handleSearchSubmit} className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="Pure home products..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full border rounded-full py-1.5 px-4 text-sm outline-none transition-all font-medium"
+                                                style={{
+                                                    backgroundColor: colors.neutralLight,
+                                                    borderColor: colors.accent,
+                                                    color: colors.textMain
+                                                }}
+                                                autoFocus
+                                            />
+                                        </form>
+
+                                        <AnimatePresence>
+                                            {searchTerm.trim() && searchSuggestions.length > 0 && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -6 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -6 }}
+                                                    className="absolute left-0 top-full mt-3 w-[320px] max-h-96 overflow-y-auto rounded-3xl border bg-white shadow-2xl z-50"
+                                                    style={{ borderColor: colors.accent }}
+                                                >
+                                                    <div className="px-4 py-3 border-b" style={{ borderColor: colors.neutralLight }}>
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: colors.textSecondary }}>
+                                                            Live Suggestions
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="p-2">
+                                                        {searchSuggestions.map((product) => (
+                                                            <button
+                                                                key={product._id}
+                                                                type="button"
+                                                                onClick={() => handleSuggestionClick(product._id)}
+                                                                className="w-full flex items-center gap-3 rounded-2xl p-3 text-left transition-colors hover:bg-[#F5F5F5]"
+                                                            >
+                                                                <div className="h-12 w-12 rounded-2xl overflow-hidden bg-[#F5F5F5] flex-shrink-0">
+                                                                    <img
+                                                                        src={product.images?.[0] || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=500'}
+                                                                        alt={product.name}
+                                                                        className="h-full w-full object-cover"
+                                                                    />
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-sm font-bold truncate" style={{ color: colors.textMain }}>
+                                                                        {product.name}
+                                                                    </p>
+                                                                    <p className="text-[11px] uppercase tracking-[0.16em] truncate" style={{ color: colors.textSecondary }}>
+                                                                        {product.category || 'Product'}
+                                                                    </p>
+                                                                </div>
+                                                                <span className="text-sm font-black" style={{ color: colors.primary }}>
+                                                                    ₹{product.price}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
                                 )}
                             </AnimatePresence>
                             <button

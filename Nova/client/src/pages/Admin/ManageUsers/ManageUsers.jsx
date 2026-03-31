@@ -132,10 +132,10 @@ const ManageUsers = () => {
     }, [isLoading, error, users.length]);
 
     return (
-        <div className="min-h-screen bg-[#FAF7F2] flex w-full overflow-x-hidden font-sans">
+        <div className="min-h-screen bg-[#FAF7F2] flex font-sans overflow-hidden">
             <AdminSidebar />
 
-            <main className="flex-1 p-6 md:p-10 lg:p-16">
+            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto max-h-screen">
 
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">

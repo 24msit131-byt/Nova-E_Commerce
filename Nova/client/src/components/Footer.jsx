@@ -86,8 +86,8 @@ const Footer = () => {
                     <p>© 2026 Nova Home Cleaning. All rights reserved.</p>
                     <div className="flex gap-5 mt-2 md:mt-0">
                         <Link to="/privacy-policy" className="hover:underline">Privacy Policy</Link>
-                        <Link to="#" className="hover:underline">Terms of Service</Link>
-                        <Link to="#" className="hover:underline">Shipping Info</Link>
+                        <Link to="/terms-of-service" className="hover:underline">Terms of Service</Link>
+                        <Link to="/shipping-info" className="hover:underline">Shipping Info</Link>
                     </div>
                 </div>
             </div>

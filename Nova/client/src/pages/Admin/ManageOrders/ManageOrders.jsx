@@ -83,7 +83,7 @@ const ManageOrders = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#FAF7F2] flex w-full">
+            <div className="min-h-screen bg-[#FAF7F2] flex font-sans">
                 <AdminSidebar />
                 <main className="flex-1 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#A68A64]"></div>
@@ -93,10 +93,10 @@ const ManageOrders = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#FAF7F2] flex w-full overflow-x-hidden font-sans">
+        <div className="min-h-screen bg-[#FAF7F2] flex font-sans overflow-hidden">
             <AdminSidebar />
 
-            <main className="flex-1 p-6 md:p-10 lg:p-16">
+            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto max-h-screen">
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                     <div>

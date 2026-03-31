@@ -40,6 +40,20 @@ const Cart = () => {
     const [relatedLoading, setRelatedLoading] = useState(false);
     const [relatedError, setRelatedError] = useState("");
     const [addingRelatedId, setAddingRelatedId] = useState(null);
+
+    const normalizeStoredPromo = (promo) => {
+        if (!promo?.code || typeof promo.discount !== 'number') {
+            return null;
+        }
+
+        return {
+            code: promo.code,
+            discount: promo.discount,
+            discountType: promo.discountType || null,
+            discountValue: typeof promo.discountValue === 'number' ? promo.discountValue : null,
+            discountDisplay: promo.discountDisplay || null
+        };
+    };
     
 
     // --- Delivery & Calculation Logic (Logic preserved) ---
@@ -49,7 +63,7 @@ const Cart = () => {
     const progressPercentage = Math.min((subtotal / freeDeliveryThreshold) * 100, 100);
 
     const shipping = subtotal >= freeDeliveryThreshold || subtotal === 0 ? 0 : 50;
-    const discount = appliedPromo ? appliedPromo.discount : 0;
+    const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
     const gst = subtotal > 0 ? (subtotal * 0.18) : 0;
     const total = subtotal + shipping + gst - discount;
 
@@ -60,9 +74,8 @@ const Cart = () => {
 
         try {
             const parsedPromo = JSON.parse(savedPromo);
-            if (parsedPromo?.code && typeof parsedPromo.discount === 'number') {
-                setAppliedPromo(parsedPromo);
-            }
+            const normalizedPromo = normalizeStoredPromo(parsedPromo);
+            if (normalizedPromo) setAppliedPromo(normalizedPromo);
         } catch (error) {
             localStorage.removeItem('appliedPromo');
         }
@@ -188,7 +201,13 @@ const Cart = () => {
             });
 
             if (data.success) {
-                const promo = { code: data.code, discount: data.discountAmount };
+                const promo = {
+                    code: data.code,
+                    discount: data.discountAmount,
+                    discountType: data.discountType,
+                    discountValue: data.discountValue,
+                    discountDisplay: data.discountDisplay
+                };
                 setAppliedPromo(promo);
                 localStorage.setItem('appliedPromo', JSON.stringify(promo));
                 setPromoInput("");
@@ -347,7 +366,7 @@ const Cart = () => {
                                             {appliedPromo && (
                                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-between text-xs font-bold uppercase tracking-widest" style={{ color: colors.primary }}>
                                                     <span>Promo Discount</span>
-                                                    <span>- ₹{appliedPromo.discount}</span>
+                                                    <span>- ₹{appliedPromo.discount.toFixed(2)}</span>
                                                 </motion.div>
                                             )}
 

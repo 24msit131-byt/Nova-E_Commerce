@@ -25,6 +25,20 @@ const Checkout = () => {
         state: ''
     });
 
+    const normalizeStoredPromo = (promo) => {
+        if (!promo?.code || typeof promo.discount !== 'number') {
+            return null;
+        }
+
+        return {
+            code: promo.code,
+            discount: promo.discount,
+            discountType: promo.discountType || null,
+            discountValue: typeof promo.discountValue === 'number' ? promo.discountValue : null,
+            discountDisplay: promo.discountDisplay || null
+        };
+    };
+
     const colors = {
         primary: '#A68A64',
         pageBg: '#FAF7F2',
@@ -63,9 +77,8 @@ const Checkout = () => {
 
         try {
             const parsedPromo = JSON.parse(savedPromo);
-            if (parsedPromo?.code && typeof parsedPromo.discount === 'number') {
-                setAppliedPromo(parsedPromo);
-            }
+            const normalizedPromo = normalizeStoredPromo(parsedPromo);
+            if (normalizedPromo) setAppliedPromo(normalizedPromo);
         } catch (error) {
             localStorage.removeItem('appliedPromo');
         }
@@ -113,7 +126,7 @@ const Checkout = () => {
     const subtotal = cartTotal;
     const shipping = subtotal >= 1000 || subtotal === 0 ? 0 : 50;
     const gst = subtotal > 0 ? subtotal * 0.18 : 0;
-    const promoDiscount = appliedPromo?.discount || 0;
+    const promoDiscount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
     const total = subtotal + shipping + gst - promoDiscount;
 
     const handleShippingChange = (e) => {

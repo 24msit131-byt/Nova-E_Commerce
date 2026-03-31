@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { FaFilter, FaSearch, FaStar, FaChevronDown, FaThLarge, FaList, FaBoxOpen } from 'react-icons/fa';
+import { FaFilter, FaSearch, FaStar, FaChevronDown, FaThLarge, FaList, FaBoxOpen, FaRupeeSign } from 'react-icons/fa';
 import { HiOutlineShoppingBag } from 'react-icons/hi2';
 import api from '../../../services/api';
 import { useCart } from '../../../context/CartContext.jsx';
@@ -11,6 +11,10 @@ const Products = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
     const [selectedCategories, setSelectedCategories] = useState([]);
+    const [selectedPriceRange, setSelectedPriceRange] = useState('');
+    const [selectedRating, setSelectedRating] = useState(0);
+    const [inStockOnly, setInStockOnly] = useState(false);
+    const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -54,12 +58,55 @@ const Products = () => {
         }
     };
 
+    const handlePriceChange = (rangeValue) => {
+        setSelectedPriceRange(rangeValue);
+    };
+
+    const handleRatingChange = (rating) => {
+        setSelectedRating((prev) => (prev === rating ? 0 : rating));
+    };
+
+    const handleStockFilter = (checked) => {
+        setInStockOnly(checked);
+    };
+
+    const resetAllFilters = () => {
+        setSelectedCategories([]);
+        setSelectedPriceRange('');
+        setSelectedRating(0);
+        setInStockOnly(false);
+    };
+
+    const hasActiveFilters = Boolean(selectedPriceRange || selectedRating || inStockOnly);
+    const activeFilterCount = selectedCategories.length + (selectedPriceRange ? 1 : 0) + (selectedRating ? 1 : 0) + (inStockOnly ? 1 : 0);
+
     const filteredProducts = products.filter(product => {
-        const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            product.category.toLowerCase().includes(searchQuery.toLowerCase());
-        const productCat = product.category.toLowerCase().replace(' care', '');
+        const name = (product.name || '').toLowerCase();
+        const category = (product.category || '').toLowerCase();
+        const matchesSearch = name.includes(searchQuery.toLowerCase()) || category.includes(searchQuery.toLowerCase());
+
+        const productCat = category.replace(' care', '').trim();
         const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(productCat);
-        return matchesSearch && matchesCategory;
+
+        const price = Number(product.price) || 0;
+        let matchesPrice = true;
+        if (selectedPriceRange === '0-99') {
+            matchesPrice = price <= 99;
+        } else if (selectedPriceRange === '100-199') {
+            matchesPrice = price >= 100 && price <= 199;
+        } else if (selectedPriceRange === '200-499') {
+            matchesPrice = price >= 200 && price <= 499;
+        } else if (selectedPriceRange === '500-above') {
+            matchesPrice = price >= 500;
+        }
+
+        const rating = Number(product.rating) || 0;
+        const matchesRating = selectedRating === 0 || rating >= selectedRating;
+
+        const stockValue = Number(product.stock ?? product.quantity ?? 0);
+        const matchesStock = !inStockOnly || stockValue > 0;
+
+        return matchesSearch && matchesCategory && matchesPrice && matchesRating && matchesStock;
     });
 
     return (
@@ -94,48 +141,164 @@ const Products = () => {
                     </div>
                 </div>
 
-                <div className="w-full px-6 md:px-10 flex flex-col lg:flex-row gap-16">
+                <div className="w-full px-6 md:px-10">
+
+                    <button
+                        type="button"
+                        onClick={() => setIsFilterPanelOpen((prev) => !prev)}
+                        className="inline-flex items-center justify-center gap-2 self-start px-5 py-3 rounded-xl border-2 border-[#E0D8CC] bg-white text-[11px] font-black uppercase tracking-[0.16em] mb-8"
+                        style={{ color: colors.textMain }}
+                    >
+                        <FaFilter style={{ color: colors.primary }} />
+                        {isFilterPanelOpen ? 'Hide Filters' : 'Show Filters'}
+                    </button>
+
+                    {isFilterPanelOpen && (
+                        <div
+                            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+                            onClick={() => setIsFilterPanelOpen(false)}
+                        />
+                    )}
+
+                    <div className="flex flex-col lg:flex-row gap-10">
 
                     {/* 2. SIDEBAR FILTERS */}
-                    <aside className="w-full lg:w-64 flex-shrink-0">
-                        <div className="sticky top-32 space-y-12">
-                            <div>
-                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 flex items-center" style={{ color: colors.textMain }}>
-                                    <FaFilter className="mr-3" style={{ color: colors.primary }} /> Filter by Space
-                                </h3>
-                                <div className="space-y-4">
-                                    {['Kitchen', 'Floor', 'Windows', 'Bathroom'].map((cat) => (
-                                        <label key={cat} className="flex items-center group cursor-pointer">
-                                            <div className="relative flex items-center">
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-5 h-5 rounded-lg border-2 transition-all cursor-pointer appearance-none checked:bg-[#A68A64]"
-                                                    style={{ borderColor: colors.accent }}
-                                                    checked={selectedCategories.includes(cat.toLowerCase())}
-                                                    onChange={() => handleCategoryChange(cat)}
-                                                />
-                                                {selectedCategories.includes(cat.toLowerCase()) && (
-                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white text-[10px]">✓</div>
-                                                )}
-                                            </div>
-                                            <span className={`ml-4 text-[13px] font-bold uppercase tracking-wider transition-colors ${selectedCategories.includes(cat.toLowerCase()) ? 'text-[#A68A64]' : 'text-[#756A5E] group-hover:text-[#4A4036]'}`}>
-                                                {cat} Care
-                                            </span>
-                                        </label>
-                                    ))}
-                                    {selectedCategories.length > 0 && (
-                                        <button
-                                            onClick={() => setSelectedCategories([])}
-                                            className="text-[10px] font-black uppercase tracking-widest mt-6 transition-colors"
-                                            style={{ color: colors.primary }}
-                                        >
-                                            × Reset Filters
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
+                    <aside className={`${isFilterPanelOpen ? 'block' : 'hidden'} w-full lg:w-64 flex-shrink-0 fixed top-0 left-0 z-50 h-full w-[88%] max-w-[360px] bg-[#FAF7F2] p-6 overflow-y-auto transition-transform duration-300 translate-x-0 lg:static lg:z-auto lg:h-auto lg:max-w-none lg:bg-transparent lg:p-0 lg:overflow-visible`}>
+    <div className="flex items-center justify-between mb-8 lg:hidden">
+        <h3 className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: colors.textMain }}>Filters</h3>
+        <button
+            type="button"
+            onClick={() => setIsFilterPanelOpen(false)}
+            className="w-9 h-9 rounded-full border border-[#E0D8CC] text-lg"
+            style={{ color: colors.textMain }}
+            aria-label="Close filters"
+        >
+            ×
+        </button>
+    </div>
+    <div className="lg:sticky lg:top-32 space-y-12">
+        
+        {/* 1. FILTER BY SPACE (Existing) */}
+        <div>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 flex items-center" style={{ color: colors.textMain }}>
+                <FaFilter className="mr-3" style={{ color: colors.primary }} /> Filter by Space
+            </h3>
+            <div className="space-y-4">
+                {['Kitchen', 'Floor', 'Windows', 'Bathroom'].map((cat) => (
+                    <label key={cat} className="flex items-center group cursor-pointer">
+                        <div className="relative flex items-center">
+                            <input
+                                type="checkbox"
+                                className="w-5 h-5 rounded-lg border-2 transition-all cursor-pointer appearance-none checked:bg-[#A68A64]"
+                                style={{ borderColor: colors.accent }}
+                                checked={selectedCategories.includes(cat.toLowerCase())}
+                                onChange={() => handleCategoryChange(cat)}
+                            />
+                            {selectedCategories.includes(cat.toLowerCase()) && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white text-[10px]">✓</div>
+                            )}
                         </div>
-                    </aside>
+                        <span className={`ml-4 text-[13px] font-bold uppercase tracking-wider transition-colors ${selectedCategories.includes(cat.toLowerCase()) ? 'text-[#A68A64]' : 'text-[#756A5E] group-hover:text-[#4A4036]'}`}>
+                            {cat} Care
+                        </span>
+                    </label>
+                ))}
+            </div>
+        </div>
+
+        {/* 2. FILTER BY PRICE (Amazon Style Range) */}
+        <div>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 flex items-center" style={{ color: colors.textMain }}>
+                <FaRupeeSign className="mr-3" style={{ color: colors.primary }} /> Price Range
+            </h3>
+            <div className="space-y-4">
+                {[
+                    { label: 'Under ₹99', value: '0-99' },
+                    { label: '₹100 - ₹199', value: '100-199' },
+                    { label: '₹200 - ₹499', value: '200-499' },
+                    { label: 'Over ₹500', value: '500-above' }
+                ].map((range) => (
+                    <label key={range.value} className="flex items-center group cursor-pointer">
+                        <input 
+                            type="radio" 
+                            name="priceRange"
+                            className="w-4 h-4 accent-[#A68A64] cursor-pointer"
+                            checked={selectedPriceRange === range.value}
+                            onChange={() => handlePriceChange(range.value)}
+                        />
+                        <span className="ml-4 text-[13px] font-medium text-[#756A5E] group-hover:text-[#4A4036] transition-colors">
+                            {range.label}
+                        </span>
+                    </label>
+                ))}
+            </div>
+        </div>
+
+        {/* 3. CUSTOMER RATINGS (Star Filter) */}
+        <div>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 flex items-center" style={{ color: colors.textMain }}>
+                <FaStar className="mr-3" style={{ color: colors.primary }} /> Avg. Rating
+            </h3>
+            <div className="space-y-3">
+                {[4, 3, 2].map((star) => (
+                    <label key={star} className="flex items-center group cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded accent-[#A68A64] cursor-pointer"
+                            checked={selectedRating === star}
+                            onChange={() => handleRatingChange(star)}
+                        />
+                        <div className="ml-3 flex text-[#A68A64] text-xs space-x-1">
+                            {[...Array(5)].map((_, i) => (
+                                <FaStar key={i} className={i < star ? "fill-current" : "text-[#E0D8CC]"} />
+                            ))}
+                        </div>
+                        <span className="ml-3 text-[12px] font-bold text-[#756A5E] group-hover:text-[#4A4036]">
+                            & Up
+                        </span>
+                    </label>
+                ))}
+            </div>
+        </div>
+
+        {/* 4. AVAILABILITY */}
+        <div>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em]  flex items-center" style={{ color: colors.textMain }}>
+                <FaBoxOpen className="mr-3" style={{ color: colors.primary }} /> Availability
+            </h3>
+            <label className="flex items-center cursor-pointer group">
+                <div className="relative inline-flex items-center cursor-pointer mt-5">
+                    <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={inStockOnly}
+                        onChange={(e) => handleStockFilter(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-[#E0D8CC] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#A68A64]"></div>
+                    <span className="ml-4 text-[13px] font-bold uppercase tracking-wider text-[#756A5E] group-hover:text-[#4A4036]">
+                        In Stock Only
+                    </span>
+                </div>
+            </label>
+        </div>
+
+        {/* GLOBAL RESET */}
+        {(selectedCategories.length > 0 || hasActiveFilters) && (
+            <button
+                onClick={resetAllFilters}
+                className="w-full px-5 py-4 border-2 border-[#E0D8CC] rounded-2xl bg-white hover:bg-[#4A4036] hover:text-white hover:border-[#4A4036] transition-all duration-300 group mt-0"
+                style={{ color: colors.textMain }}
+            >
+                <span className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-[0.16em]">Clear All Filters</span>
+                    <span className="h-6 min-w-6 px-2 rounded-full bg-[#F2EBDD] group-hover:bg-white/20 text-xs font-black flex items-center justify-center">
+                        {activeFilterCount}
+                    </span>
+                </span>
+            </button>
+        )}
+    </div>
+</aside>
 
                     {/* 3. PRODUCT GRID */}
                     <main className="flex-1">
@@ -156,7 +319,7 @@ const Products = () => {
                                 <p className="mt-2 text-sm opacity-70">{error}</p>
                             </div>
                         ) : filteredProducts.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-10 gap-y-16">
+                            <div className={`grid grid-cols-1 sm:grid-cols-2 ${isFilterPanelOpen ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} gap-8`}> 
                                 {filteredProducts.map((item) => (
                                     <div key={item._id} className="group bg-white rounded-[2.5rem] overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-[#E0D8CC]/30">
                                         {/* Image Section */}
@@ -209,6 +372,7 @@ const Products = () => {
                             </div>
                         )}
                     </main>
+                </div>
                 </div>
             </div>
 

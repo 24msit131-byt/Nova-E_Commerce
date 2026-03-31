@@ -13,6 +13,25 @@ const PromoDashboard = () => {
     couponsRemaining: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newPromo, setNewPromo] = useState({
+    code: '',
+    discountType: 'percentage',
+    discountValue: '',
+    usageLimit: 0,
+    expiresAt: '',
+    status: 'Active'
+  });
+
+  const formatDiscountLabel = (promo) => {
+    if (promo?.discountType && typeof promo?.discountValue === 'number') {
+      return promo.discountType === 'percentage'
+        ? `${promo.discountValue}%`
+        : `₹${promo.discountValue}`;
+    }
+
+    return promo?.discount || '-';
+  };
 
   const fetchPromoCodes = async () => {
     try {
@@ -24,12 +43,7 @@ const PromoDashboard = () => {
         const couponsRemaining = codes.reduce((sum, promo) => {
           const usageLimit = Number(promo.usageLimit || 0);
           const usageCount = Number(promo.usageCount || 0);
-
-          if (usageLimit <= 0) {
-            return sum;
-          }
-
-          return sum + Math.max(usageLimit - usageCount, 0);
+          return usageLimit <= 0 ? sum : sum + Math.max(usageLimit - usageCount, 0);
         }, 0);
 
         setPromoCodes(codes);
@@ -42,7 +56,6 @@ const PromoDashboard = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching promo codes:', error);
       toast.error('Failed to load promo codes');
     } finally {
       setLoading(false);
@@ -79,23 +92,43 @@ const PromoDashboard = () => {
     }
   };
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newPromo, setNewPromo] = useState({
-    code: '',
-    discount: '',
-    usageLimit: 0,
-    expiresAt: '',
-    status: 'Active'
-  });
-
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/promos', newPromo);
+      const normalizedCode = newPromo.code.trim().toUpperCase();
+      const normalizedDiscountValue = Number(newPromo.discountValue);
+
+      if (!normalizedCode) {
+        toast.error('Promo code is required');
+        return;
+      }
+
+      if (!Number.isFinite(normalizedDiscountValue) || normalizedDiscountValue <= 0) {
+        toast.error('Please enter a valid discount value');
+        return;
+      }
+
+      const payload = {
+        code: normalizedCode,
+        discountType: newPromo.discountType,
+        discountValue: normalizedDiscountValue,
+        usageLimit: Number(newPromo.usageLimit) || 0,
+        status: 'Active',
+        ...(newPromo.expiresAt ? { expiresAt: newPromo.expiresAt } : {}),
+      };
+
+      const response = await api.post('/promos', payload);
       if (response.data.success) {
         toast.success('Promo code created successfully');
         setIsModalOpen(false);
-        setNewPromo({ code: '', discount: '', usageLimit: 0, expiresAt: '', status: 'Active' });
+        setNewPromo({
+          code: '',
+          discountType: 'percentage',
+          discountValue: '',
+          usageLimit: 0,
+          expiresAt: '',
+          status: 'Active'
+        });
         fetchPromoCodes();
       }
     } catch (error) {
@@ -104,164 +137,193 @@ const PromoDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex font-sans">
+    <div className="flex min-h-screen bg-[#e9e4dc] font-sans text-[#4A4036]">
       <AdminSidebar />
-      <main style={styles.container}>
-        <header style={styles.header}>
+      
+      <main className="flex-1 p-8">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <p style={styles.kicker}>Nova Dashboard / Management</p>
-            <h2 style={styles.title}>Promo Code Management</h2>
+            <p className="text-[10px] font-extrabold tracking-[0.2em] uppercase text-[#A68A64] mb-1">
+              Nova Dashboard / Management
+            </p>
+            <h2 className="text-3xl font-bold text-[#4A4036]">Promo Code Management</h2>
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            style={styles.addButton}
+            className="bg-[#A68A64] hover:bg-[#8e7555] text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-sm"
           >
             + Create New Code
           </button>
         </header>
 
-        {/* Quick Stats */}
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Active Coupons</p>
-            <h3 style={styles.statValue}>{stats.activeCount}</h3>
-          </div>    
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Coupons Used</p>
-            <h3 style={styles.statValue}>{stats.couponsUsed}</h3>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Coupons Remaining</p>
-            <h3 style={styles.statValue}>{stats.couponsRemaining}</h3>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Total Coupons</p>
-            <h3 style={styles.statValue}>{stats.totalCoupons}</h3>
-          </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {[
+            { label: 'Active Coupons', value: stats.activeCount },
+            { label: 'Coupons Used', value: stats.couponsUsed },
+            { label: 'Coupons Remaining', value: stats.couponsRemaining },
+            { label: 'Total Coupons', value: stats.totalCoupons },
+          ].map((stat, idx) => (
+            <div key={idx} className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-[#D6C9B5] shadow-sm">
+              <p className="text-[#A68A64] text-sm font-medium mb-1">{stat.label}</p>
+              <h3 className="text-3xl font-bold text-[#4A4036]">{stat.value}</h3>
+            </div>
+          ))}
         </div>
 
-        {/* Promo Table */}
-        <div style={styles.tableContainer}>
-          {loading ? (
-            <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
-          ) : (
-            <table style={styles.table}>
-              <thead>
-                <tr style={styles.tableHeader}>
-                  <th>Code</th>
-                  <th>Discount</th>
-                  <th>Usages</th>
-                  <th>Available</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+       {/* Table Section */}
+<div className="bg-white rounded-2xl border border-[#D6C9B5] overflow-hidden shadow-sm">
+  {loading ? (
+    <div className="p-20 text-center font-medium">Loading records...</div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left border-collapse">
+        <thead className="bg-[#f5f2ee] border-b border-[#D6C9B5]">
+          <tr>
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[#A68A64]">Code</th>
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[#A68A64]">Discount</th>
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[#A68A64]">Usage</th>
+            {/* Added text-center here to match the button below */}
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[#A68A64] text-center">Status</th>
+            <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[#A68A64] text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#D6C9B5]/30">
+          {promoCodes.length > 0 ? (
+            promoCodes.map((item) => {
+              const usageCount = Number(item.usageCount || 0);
+              const usageLimit = Number(item.usageLimit || 0);
+              const available = usageLimit > 0 ? Math.max(usageLimit - usageCount, 0) : 'Unlimited';
+              const isLimitReached = usageLimit > 0 && usageCount >= usageLimit;
+              const displayStatus = isLimitReached ? 'Inactive' : item.status;
+
+              return (
+                <tr key={item._id} className="hover:bg-[#fcfbf9] transition-colors">
+                  <td className="px-6 py-4 font-bold text-[#A68A64]">{item.code}</td>
+                  <td className="px-6 py-4 font-medium">{formatDiscountLabel(item)}</td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-bold">{usageCount} / {usageLimit === 0 ? '∞' : usageLimit}</div>
+                    <div className="text-[11px] text-[#A68A64]/70 uppercase tracking-tighter font-semibold">Remaining: {available}</div>
+                  </td>
+                  {/* Status Cell - Centered */}
+                  <td className="px-6 py-4 text-center">
+                    <button
+                      disabled={isLimitReached}
+                      onClick={() => toggleStatus(item._id, item.status)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all inline-block ${
+                        displayStatus === 'Active' 
+                          ? 'bg-[#A68A64] text-white' 
+                          : 'bg-[#D6C9B5] text-[#4A4036] opacity-60'
+                      } ${isLimitReached ? 'cursor-not-allowed' : 'hover:scale-105'}`}
+                    >
+                      {displayStatus}
+                    </button>
+                  </td>
+                  {/* Actions Cell - Centered */}
+                  <td className="px-6 py-4 text-center">
+                    <button
+                      onClick={() => handleDelete(item._id)}
+                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95 shadow-sm inline-block"
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {promoCodes.length > 0 ? (
-                  promoCodes.map((item) => {
-                    const usageCount = Number(item.usageCount || 0);
-                    const usageLimit = Number(item.usageLimit || 0);
-                    const availableCount = usageLimit > 0 ? Math.max(usageLimit - usageCount, 0) : 'Unlimited';
-                    const isLimitReached = usageLimit > 0 && usageCount >= usageLimit;
-                    const displayStatus = isLimitReached ? 'Inactive' : item.status;
-
-                    return (
-                      <tr key={item._id} style={styles.tableRow}>
-                        <td style={styles.codeText}>{item.code}</td>
-                        <td>{item.discount}</td>
-                        <td>
-                          <div style={styles.usageValue}>{usageCount}</div>
-                          <div style={styles.usageMeta}>Times used by customers</div>
-                        </td>
-                        <td>
-                          <div style={styles.usageValue}>{availableCount}</div>
-                          <div style={styles.usageMeta}>Remaining coupon slots</div>
-                        </td>
-                        <td>
-                          <span
-                            onClick={() => !isLimitReached && toggleStatus(item._id, item.status)}
-                            style={{
-                              ...(displayStatus === 'Active' ? styles.statusActive : styles.statusInactive),
-                              cursor: isLimitReached ? 'not-allowed' : 'pointer',
-                              opacity: isLimitReached ? 0.8 : 1
-                            }}
-                          >
-                            {displayStatus}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <button
-                              onClick={() => handleDelete(item._id)}
-                              style={{ ...styles.editBtn, color: '#ef4444' }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="5" style={{ padding: '20px', textAlign: 'center' }}>No promo codes found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              );
+            })
+          ) : (
+            <tr>
+              <td colSpan="5" className="px-6 py-12 text-center text-[#A68A64] italic">No promotional codes found.</td>
+            </tr>
           )}
-        </div>
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
 
-        {/* Modal for Creating New Promo Code */}
+        {/* Create Modal */}
         {isModalOpen && (
-          <div style={styles.modalOverlay}>
-            <div style={styles.modalContent}>
-              <h3 style={styles.modalTitle}>Create New Promo Code</h3>
-              <form onSubmit={handleCreate}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Promo Code</label>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#4A4036]/40 backdrop-blur-sm">
+            <div className="bg-[#e9e4dc] w-full max-w-md rounded-2xl shadow-2xl border border-[#D6C9B5] overflow-hidden">
+              <div className="bg-[#A68A64] p-6">
+                <h3 className="text-xl font-bold text-white">New Promo Code</h3>
+              </div>
+              <form onSubmit={handleCreate} className="p-8 space-y-5">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-[#4A4036] mb-1.5">Promo Code</label>
                   <input 
                     type="text" 
                     value={newPromo.code}
-                    onChange={(e) => setNewPromo({...newPromo, code: e.target.value})}
-                    style={styles.input} 
-                    required 
-                    placeholder="e.g. SUMMER25"
-                  />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Discount (e.g. 20% or ₹100)</label>
-                  <input 
-                    type="text" 
-                    value={newPromo.discount}
-                    onChange={(e) => setNewPromo({...newPromo, discount: e.target.value})}
-                    style={styles.input} 
-                    required 
-                    placeholder="20%"
-                  />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Usage Limit (0 for unlimited)</label>
-                  <input 
-                    type="number" 
-                    value={newPromo.usageLimit}
-                    onChange={(e) => setNewPromo({...newPromo, usageLimit: parseInt(e.target.value)})}
-                    style={styles.input} 
+                    onChange={(e) => setNewPromo({...newPromo, code: e.target.value.toUpperCase()})}
+                    className="w-full bg-white border border-[#D6C9B5] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#A68A64] outline-none"
+                    placeholder="SUMMER2026"
                     required 
                   />
                 </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Expiry Date</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-[#4A4036] mb-1.5">Discount Type</label>
+                    <select
+                      value={newPromo.discountType}
+                      onChange={(e) => setNewPromo({...newPromo, discountType: e.target.value})}
+                      className="w-full bg-white border border-[#D6C9B5] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#A68A64] outline-none"
+                      required
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed Amount (₹)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-[#4A4036] mb-1.5">
+                      {newPromo.discountType === 'percentage' ? 'Discount %' : 'Discount ₹'}
+                    </label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      step={newPromo.discountType === 'percentage' ? '0.01' : '1'}
+                      value={newPromo.discountValue}
+                      onChange={(e) => setNewPromo({...newPromo, discountValue: e.target.value})}
+                      className="w-full bg-white border border-[#D6C9B5] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#A68A64] outline-none"
+                      placeholder={newPromo.discountType === 'percentage' ? '10' : '100'}
+                      required 
+                    />
+                  </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase text-[#4A4036] mb-1.5">Usage Limit</label>
+                    <input 
+                      type="number" 
+                      value={newPromo.usageLimit}
+                      onChange={(e) => setNewPromo({...newPromo, usageLimit: Number(e.target.value) || 0})}
+                      className="w-full bg-white border border-[#D6C9B5] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#A68A64] outline-none"
+                      required 
+                    />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-[#4A4036] mb-1.5">Expiry Date</label>
                   <input 
                     type="date" 
                     value={newPromo.expiresAt}
                     onChange={(e) => setNewPromo({...newPromo, expiresAt: e.target.value})}
-                    style={styles.input} 
+                    className="w-full bg-white border border-[#D6C9B5] rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-[#A68A64] outline-none"
                   />
                 </div>
-                <div style={styles.modalActions}>
-                  <button type="button" onClick={() => setIsModalOpen(false)} style={styles.cancelBtn}>Cancel</button>
-                  <button type="submit" style={styles.submitBtn}>Create Code</button>
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)} 
+                    className="flex-1 px-4 py-2.5 border border-[#A68A64] text-[#A68A64] rounded-lg font-bold hover:bg-[#A68A64]/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 px-4 py-2.5 bg-[#A68A64] text-white rounded-lg font-bold hover:bg-[#8e7555] transition-colors shadow-md"
+                  >
+                    Create
+                  </button>
                 </div>
               </form>
             </div>
@@ -270,38 +332,6 @@ const PromoDashboard = () => {
       </main>
     </div>
   );
-};
-
-const styles = {
-  container: { flex: 1, padding: '30px', backgroundColor: '#f9fafb', minHeight: '100vh', fontFamily: 'Inter, sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: '16px' },
-  kicker: { color: '#A68A64', fontSize: '10px', fontWeight: '800', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '6px' },
-  title: { fontSize: '24px', color: '#111827', fontWeight: '600' },
-  addButton: { backgroundColor: '#3EB489', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '500' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px', marginBottom: '30px' },
-  statCard: { backgroundColor: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e5e7eb', textAlign: 'center' },
-  statLabel: { color: '#6b7280', fontSize: '14px', marginBottom: '8px' },
-  statValue: { fontSize: '28px', fontWeight: 'bold', color: '#111827' },
-  tableContainer: { backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' },
-  table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
-  tableHeader: { backgroundColor: '#f3f4f6', color: '#374151', fontSize: '14px', height: '50px' },
-  tableRow: { borderBottom: '1px solid #f3f4f6', height: '60px' },
-  codeText: { fontWeight: 'bold', color: '#3EB489' },
-  usageValue: { fontWeight: '800', color: '#111827' },
-  usageMeta: { marginTop: '4px', fontSize: '12px', color: '#6b7280' },
-  statusActive: { padding: '4px 10px', backgroundColor: '#def7ec', color: '#03543f', borderRadius: '12px', fontSize: '12px' },
-  statusInactive: { padding: '4px 10px', backgroundColor: '#f3f4f6', color: '#6b7280', borderRadius: '12px', fontSize: '12px' },
-  editBtn: { background: 'none', border: 'none', color: '#4b5563', cursor: 'pointer', textDecoration: 'underline' },
-  
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalContent: { backgroundColor: '#fff', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' },
-  modalTitle: { marginBottom: '20px', fontSize: '18px', fontWeight: '600', color: '#111827' },
-  inputGroup: { marginBottom: '15px' },
-  label: { display: 'block', fontSize: '14px', color: '#374151', marginBottom: '5px' },
-  input: { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', outline: 'none' },
-  modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' },
-  cancelBtn: { padding: '8px 16px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#fff', cursor: 'pointer' },
-  submitBtn: { padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#3EB489', color: '#fff', cursor: 'pointer', fontWeight: '500' }
 };
 
 export default PromoDashboard;

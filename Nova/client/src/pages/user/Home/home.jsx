@@ -7,23 +7,69 @@ import OurProcess from './OurProcess';
 import FeaturedCollection from './featuredCollection';
 import api from '../../../services/api';
 
+const getCachedBanner = () => {
+    try {
+        const cached = localStorage.getItem('homeBanner');
+        return cached ? JSON.parse(cached) : null;
+    } catch {
+        return null;
+    }
+};
 
 const Home = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [banner, setBanner] = useState(null);
+    const [banner, setBanner] = useState(getCachedBanner);
+
+    useEffect(() => {
+        const heroUrl = banner?.imageUrl;
+        if (!heroUrl) {
+            return;
+        }
+
+        const preloadId = 'home-hero-preload';
+        let preloadLink = document.getElementById(preloadId);
+
+        if (!preloadLink) {
+            preloadLink = document.createElement('link');
+            preloadLink.id = preloadId;
+            preloadLink.rel = 'preload';
+            preloadLink.as = 'image';
+            document.head.appendChild(preloadLink);
+        }
+
+        preloadLink.href = heroUrl;
+    }, [banner?.imageUrl]);
 
     useEffect(() => {
         const fetchHomeData = async () => {
-            try {
-                setLoading(true);
-                const [productsRes, bannerRes] = await Promise.all([
-                    api.get('/products'),
-                    api.get('/banner')
-                ]);
+            setLoading(true);
 
-                setProducts(productsRes.data.data);
-                setBanner(bannerRes.data?.data || null);
+            const productsPromise = api
+                .get('/products')
+                .then((productsRes) => {
+                    setProducts(productsRes.data.data);
+                })
+                .catch((err) => {
+                    console.error('Error fetching products:', err);
+                });
+
+            const bannerPromise = api
+                .get('/banner')
+                .then((bannerRes) => {
+                    const latestBanner = bannerRes.data?.data || null;
+                    setBanner(latestBanner);
+
+                    if (latestBanner) {
+                        localStorage.setItem('homeBanner', JSON.stringify(latestBanner));
+                    }
+                })
+                .catch((err) => {
+                    console.error('Error fetching banner:', err);
+                });
+
+            try {
+                await Promise.allSettled([productsPromise, bannerPromise]);
                 setLoading(false);
             } catch (err) {
                 console.error('Error fetching home data:', err);

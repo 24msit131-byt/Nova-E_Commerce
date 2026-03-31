@@ -27,13 +27,13 @@ const AdminSidebar = () => {
         { name: 'Promos', path: '/admin/promo-code', icon: <FaCodepen /> },
     ];
 
-    /*const handleLogout = () => {
-        // Clear auth data (assuming it's in localStorage)
+    const handleLogout = () => {
+        // Clear auth data from localStorage
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         toast.success('Logged out successfully');
-        navigate('/login');
-    };*/
+        navigate('/');
+    };
 
     return (
         <div 
@@ -75,7 +75,7 @@ const AdminSidebar = () => {
             </nav>
 
             {/* Optional Logout Area (Preserved as requested) */}
-            {/* <div className="p-6 border-t" style={{ borderColor: colors.accent }}>
+            { <div className="p-1 border-t " style={{ borderColor: colors.accent }}>
                 <button
                     onClick={handleLogout}
                     className="flex items-center space-x-4 px-5 py-4 w-full text-[11px] font-black uppercase tracking-[0.2em] text-red-400 hover:bg-red-50 rounded-2xl transition-all"
@@ -84,15 +84,9 @@ const AdminSidebar = () => {
                     <span>Logout</span>
                 </button>
             </div>
-            */}
+            }
             
-            {/* Sidebar Branding Footer */}
-            <div className="p-8">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-dashed text-center" style={{ borderColor: colors.accent }}>
-                    <p className="text-[9px] font-bold uppercase tracking-widest opacity-40" style={{ color: colors.textMain }}>Boutique Management</p>
-                    <p className="text-[10px] font-black mt-1" style={{ color: colors.primary }}>v2.1 Sanctuary</p>
-                </div>
-            </div>
+            
         </div>
     );
 };

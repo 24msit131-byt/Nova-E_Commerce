@@ -15,7 +15,7 @@ const FeaturedCollection = ({ products, loading }) => {
     }
 
     return (
-        <section className="bg-[#FAF7F2] py-24 px-6">
+        <section className="bg-[#F5F2ED] py-24 px-6">
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-end mb-12">
                     <div>
@@ -29,7 +29,7 @@ const FeaturedCollection = ({ products, loading }) => {
                     </Link>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 ">
                     {products && products.length > 0 ? (
                         (() => {
                             const seenCategories = new Set();

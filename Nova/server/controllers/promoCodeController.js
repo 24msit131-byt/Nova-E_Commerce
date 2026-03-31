@@ -1,5 +1,76 @@
 import PromoCode from '../models/PromoCode.js';
 
+const parseLegacyDiscount = (discount) => {
+    const raw = String(discount || '').trim();
+
+    if (!raw) {
+        return null;
+    }
+
+    if (raw.includes('%')) {
+        const value = Number.parseFloat(raw.replace('%', '').trim());
+        if (Number.isFinite(value) && value >= 0) {
+            return { discountType: 'percentage', discountValue: value };
+        }
+        return null;
+    }
+
+    const value = Number.parseFloat(raw.replace('₹', '').replace(/,/g, '').trim());
+    if (Number.isFinite(value) && value >= 0) {
+        return { discountType: 'fixed', discountValue: value };
+    }
+
+    return null;
+};
+
+const formatDiscount = (discountType, discountValue) => {
+    return discountType === 'percentage'
+        ? `${discountValue}%`
+        : `₹${discountValue}`;
+};
+
+const getPromoDiscountMeta = (promoCode) => {
+    let discountType = promoCode.discountType;
+    let discountValue = Number(promoCode.discountValue);
+
+    if (!discountType || !Number.isFinite(discountValue)) {
+        const parsed = parseLegacyDiscount(promoCode.discount);
+        if (parsed) {
+            discountType = parsed.discountType;
+            discountValue = parsed.discountValue;
+        }
+    }
+
+    if (!discountType || !Number.isFinite(discountValue)) {
+        return null;
+    }
+
+    return {
+        discountType,
+        discountValue,
+        discountDisplay: formatDiscount(discountType, discountValue)
+    };
+};
+
+const calculateDiscountAmount = (subtotal, discountType, discountValue) => {
+    const subtotalNumber = Number(subtotal);
+    const safeSubtotal = Number.isFinite(subtotalNumber) && subtotalNumber > 0 ? subtotalNumber : 0;
+
+    if (safeSubtotal === 0) {
+        return 0;
+    }
+
+    let discountAmount = discountType === 'percentage'
+        ? (safeSubtotal * discountValue) / 100
+        : discountValue;
+
+    if (!Number.isFinite(discountAmount) || discountAmount < 0) {
+        discountAmount = 0;
+    }
+
+    return Math.min(discountAmount, safeSubtotal);
+};
+
 const deactivateExpiredPromoCodes = async () => {
     const now = new Date();
 
@@ -49,13 +120,51 @@ export const getAllPromoCodes = async (req, res) => {
 // @access  Private/Admin
 export const createPromoCode = async (req, res) => {
     try {
-        const { code, discount, usageLimit, expiresAt, status } = req.body;
-
-        const promoCode = await PromoCode.create({
+        const {
             code,
+            discountType,
+            discountValue,
             discount,
             usageLimit,
             expiresAt,
+            status
+        } = req.body;
+
+        let normalizedType = discountType;
+        let normalizedValue = Number(discountValue);
+
+        if (!normalizedType || !Number.isFinite(normalizedValue)) {
+            const parsedLegacy = parseLegacyDiscount(discount);
+            if (parsedLegacy) {
+                normalizedType = parsedLegacy.discountType;
+                normalizedValue = parsedLegacy.discountValue;
+            }
+        }
+
+        if (!['percentage', 'fixed'].includes(normalizedType) || !Number.isFinite(normalizedValue) || normalizedValue < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide valid discount type and value'
+            });
+        }
+
+        const normalizedUsageLimit = Number.isFinite(Number(usageLimit)) ? Math.max(Number(usageLimit), 0) : 0;
+        const normalizedExpiresAt = expiresAt ? new Date(expiresAt) : undefined;
+
+        if (normalizedExpiresAt && Number.isNaN(normalizedExpiresAt.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a valid expiry date'
+            });
+        }
+
+        const promoCode = await PromoCode.create({
+            code,
+            discountType: normalizedType,
+            discountValue: normalizedValue,
+            discount: formatDiscount(normalizedType, normalizedValue),
+            usageLimit: normalizedUsageLimit,
+            expiresAt: normalizedExpiresAt,
             status
         });
 
@@ -180,27 +289,25 @@ export const validatePromoCode = async (req, res) => {
             });
         }
 
-        // Calculate discount
-        let discountAmount = 0;
-        const discountStr = promoCode.discount;
+        const discountMeta = getPromoDiscountMeta(promoCode);
 
-        if (discountStr.includes('%')) {
-            const percentage = parseFloat(discountStr.replace('%', ''));
-            discountAmount = (subtotal * percentage) / 100;
-        } else {
-            // Assume it's a fixed amount like ₹100 or 100
-            const fixedAmount = parseFloat(discountStr.replace('₹', '').replace(',', ''));
-            discountAmount = fixedAmount;
+        if (!discountMeta) {
+            return res.status(400).json({
+                success: false,
+                message: 'Promo code discount configuration is invalid'
+            });
         }
 
-        // Ensure discount doesn't exceed subtotal
-        discountAmount = Math.min(discountAmount, subtotal);
+        const { discountType, discountValue, discountDisplay } = discountMeta;
+        const discountAmount = calculateDiscountAmount(subtotal, discountType, discountValue);
 
         res.status(200).json({
             success: true,
             code: promoCode.code,
             discountAmount,
-            discountType: discountStr.includes('%') ? 'percentage' : 'fixed'
+            discountType,
+            discountValue,
+            discountDisplay
         });
     } catch (error) {
         res.status(500).json({

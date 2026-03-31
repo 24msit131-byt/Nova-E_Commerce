@@ -16,6 +16,8 @@ import AboutUs from "./pages/user/AboutUs/aboutUs";
 import ContactUs from "./pages/user/ContactUs/contactUs";
 import Checkout from "./pages/user/Checkout/Checkout";
 import PrivacyPolicy from "./components/PrivacyPolicy";
+import TermsAndService from "./components/TermsAndService";
+import ShippingInfo from "./components/ShippingInfo";
 import ManageProducts from "./pages/Admin/ManageProducts/ManageProducts";
 import ManageOrders from "./pages/Admin/ManageOrders/ManageOrders";
 import ManageUsers from "./pages/Admin/ManageUsers/ManageUsers";
@@ -54,6 +56,8 @@ export default function App() {
         <Route path="/aboutus" element={<AboutUs />} />
         <Route path="/contactus" element={<ContactUs />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-of-service" element={<TermsAndService />} />
+        <Route path="/shipping-info" element={<ShippingInfo />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/products" element={<ManageProducts />} />

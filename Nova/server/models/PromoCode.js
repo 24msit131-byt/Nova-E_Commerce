@@ -8,9 +8,19 @@ const promoCodeSchema = new mongoose.Schema({
         uppercase: true,
         trim: true,
     },
+    discountType: {
+        type: String,
+        enum: ['percentage', 'fixed'],
+        required: [true, 'Please select a discount type'],
+    },
+    discountValue: {
+        type: Number,
+        required: [true, 'Please provide a discount value'],
+        min: [0, 'Discount value cannot be negative'],
+    },
+    // Legacy display field retained for backward compatibility with existing data.
     discount: {
         type: String,
-        required: [true, 'Please provide a discount value (e.g., 20% or ₹100)'],
         trim: true,
     },
     usageLimit: {
@@ -33,6 +43,15 @@ const promoCodeSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+});
+
+promoCodeSchema.pre('validate', function promoCodePreValidate() {
+    if (this.discountType && Number.isFinite(Number(this.discountValue))) {
+        const normalizedValue = Number(this.discountValue);
+        this.discount = this.discountType === 'percentage'
+            ? `${normalizedValue}%`
+            : `₹${normalizedValue}`;
+    }
 });
 
 const PromoCode = mongoose.model('PromoCode', promoCodeSchema);

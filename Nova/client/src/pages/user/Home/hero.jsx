@@ -1,6 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+
+const fallbackImageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%232b241d'/%3E%3Cstop offset='100%25' stop-color='%2353473b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1920' height='1080' fill='url(%23g)'/%3E%3C/svg%3E";
+
+const wasImageLoaded = (url) => {
+    try {
+        return localStorage.getItem('homeHeroLoadedImageUrl') === url;
+    } catch {
+        return false;
+    }
+};
+
+const rememberLoadedImage = (url) => {
+    try {
+        localStorage.setItem('homeHeroLoadedImageUrl', url);
+    } catch {
+        // ignore storage failures
+    }
+};
 
 const Hero = ({ banner }) => {
     const colors = {
@@ -14,23 +32,86 @@ const Hero = ({ banner }) => {
     const title = banner?.title || 'Pure solutions for a spotless sanctuary.';
     const subtitle = banner?.subtitle || 'Nova brings the art of curation to home care. Elevate your living space with eco-conscious products designed for performance and peace of mind.';
     const link = banner?.link || '/products';
-    const imageUrl = banner?.imageUrl || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=2000';
+    const imageUrl = banner?.imageUrl || fallbackImageUrl;
+    const hasKnownLoadedImage = imageUrl !== fallbackImageUrl && wasImageLoaded(imageUrl);
+    const [isImageLoaded, setIsImageLoaded] = useState(imageUrl === fallbackImageUrl || hasKnownLoadedImage);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        if (!imageUrl || imageUrl === fallbackImageUrl) {
+            setIsImageLoaded(true);
+            return () => {
+                isMounted = false;
+            };
+        }
+
+        if (wasImageLoaded(imageUrl)) {
+            setIsImageLoaded(true);
+            return () => {
+                isMounted = false;
+            };
+        }
+
+        setIsImageLoaded(false);
+        const img = new Image();
+        img.src = imageUrl;
+
+        if (img.complete) {
+            rememberLoadedImage(imageUrl);
+            setIsImageLoaded(true);
+            return () => {
+                isMounted = false;
+            };
+        }
+
+        img.onload = () => {
+            if (isMounted) {
+                rememberLoadedImage(imageUrl);
+                setIsImageLoaded(true);
+            }
+        };
+
+        img.onerror = () => {
+            if (isMounted) {
+                setIsImageLoaded(true);
+            }
+        };
+
+        return () => {
+            isMounted = false;
+        };
+    }, [imageUrl]);
 
     return (
-        <section className="relative min-h-screen flex items-center overflow-hidden">
+        <section className="relative min-h-screen flex items-center overflow-hidden bg-[#2b241d]">
             
             {/* 1. Background Image - Spans Full Section */}
             <div className="absolute inset-0 z-0">
+                <div
+                    className={`absolute inset-0 bg-gradient-to-br from-[#2b241d] to-[#53473b] transition-opacity duration-500 ${isImageLoaded ? 'opacity-0' : 'opacity-100'}`}
+                />
                 <motion.img
                     initial={{ scale: 1.1 }}
                     animate={{ scale: 1 }}
                     transition={{ duration: 2, ease: "easeOut" }}
                     src={imageUrl}
                     alt="Hero Background"
-                    className="w-full h-full object-cover"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    onLoad={() => {
+                        rememberLoadedImage(imageUrl);
+                        setIsImageLoaded(true);
+                    }}
+                    onError={() => setIsImageLoaded(true)}
+                    className={`w-full h-full object-cover transition-opacity ${isImageLoaded ? 'duration-150 opacity-100' : 'duration-300 opacity-0'}`}
                 />
                 {/* 2. Dark Overlay for Text Contrast */}
-                <div className="absolute inset-0" style={{ backgroundColor: colors.overlay }} />
+                <div
+                    className={`absolute inset-0 transition-opacity ${isImageLoaded ? 'duration-150 opacity-100' : 'duration-300 opacity-0'}`}
+                    style={{ backgroundColor: colors.overlay }}
+                />
             </div>
 
             {/* 3. Content Container */}
