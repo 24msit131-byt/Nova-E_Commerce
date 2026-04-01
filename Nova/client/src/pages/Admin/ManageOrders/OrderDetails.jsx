@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
     FaArrowLeft, FaPrint, FaTruck, FaUser, FaCreditCard,
-    FaBox, FaMapMarkerAlt, FaCheckCircle, FaClock, FaMobileAlt, FaStickyNote, FaShippingFast
+    FaBox, FaMapMarkerAlt, FaCheckCircle, FaClock, FaMobileAlt, FaStickyNote, FaShippingFast, FaExchangeAlt
 } from 'react-icons/fa';
 import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
@@ -15,8 +15,10 @@ const OrderDetail = () => {
     const [status, setStatus] = useState("Processing");
     const [trackingID, setTrackingID] = useState("");
     const [adminNote, setAdminNote] = useState("");
+    const [returnAdminNote, setReturnAdminNote] = useState("");
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingDetails, setUpdatingDetails] = useState(false);
+    const [updatingReturn, setUpdatingReturn] = useState(false);
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -27,6 +29,7 @@ const OrderDetail = () => {
                     setStatus(data.data.status || "Processing");
                     setTrackingID(data.data.trackingId || "");
                     setAdminNote(data.data.adminNotes || "");
+                    setReturnAdminNote(data.data.returnRequest?.adminNote || "");
                 }
             } catch (error) {
                 console.error("Error fetching order:", error);
@@ -64,6 +67,26 @@ const OrderDetail = () => {
             console.error("Error updating details:", error);
         } finally {
             setUpdatingDetails(false);
+        }
+    };
+
+    const handleReturnRequestUpdate = async (newStatus) => {
+        try {
+            setUpdatingReturn(true);
+            const { data } = await api.patch(`/orders/${id}/return-request`, {
+                status: newStatus,
+                adminNote: returnAdminNote
+            });
+
+            if (data.success) {
+                setOrder(data.data);
+                toast.success(`Return request ${newStatus.toLowerCase()}`);
+            }
+        } catch (error) {
+            console.error("Error updating return request:", error);
+            toast.error(error.response?.data?.message || 'Failed to update return request');
+        } finally {
+            setUpdatingReturn(false);
         }
     };
 
@@ -185,6 +208,72 @@ const OrderDetail = () => {
                             >
                                 Update Notes
                             </button>
+                        </div>
+
+                        {/* Return Request */}
+                        <div className="bg-white rounded-3xl border border-[#E0D8CC] p-8 shadow-sm">
+                            <h3 className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em] mb-6 flex items-center">
+                                <FaExchangeAlt className="mr-2" /> Return Request
+                            </h3>
+
+                            {order.returnRequest?.status && order.returnRequest.status !== 'None' ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between gap-3 bg-[#FAF7F2] border border-[#E0D8CC] rounded-xl p-4">
+                                        <span className="text-xs font-black uppercase tracking-widest text-[#4A4036]">Status</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-[#A68A64]">
+                                            {order.returnRequest.status}
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="text-[8px] font-black text-[#A68A64] uppercase tracking-widest">Customer Reason</p>
+                                        <p className="text-xs font-medium text-[#4A4036] leading-relaxed bg-[#FAF7F2] border border-[#E0D8CC] rounded-xl p-4">
+                                            {order.returnRequest.reason || 'No reason provided'}
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-[#A68A64] uppercase tracking-widest">Admin Note</label>
+                                        <textarea
+                                            value={returnAdminNote}
+                                            onChange={(e) => setReturnAdminNote(e.target.value)}
+                                            placeholder="Add review note for return request..."
+                                            className="w-full bg-white border border-[#E0D8CC] rounded-xl p-4 text-xs font-medium text-[#4A4036] outline-none focus:ring-2 focus:ring-[#A68A64]/20 transition-all resize-none shadow-inner"
+                                            rows="3"
+                                        />
+                                    </div>
+
+                                    {order.returnRequest.status === 'Requested' && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <button
+                                                onClick={() => handleReturnRequestUpdate('Approved')}
+                                                disabled={updatingReturn}
+                                                className="py-3 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
+                                            >
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => handleReturnRequestUpdate('Rejected')}
+                                                disabled={updatingReturn}
+                                                className="py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
+                                            >
+                                                Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleReturnRequestUpdate('Completed')}
+                                                disabled={updatingReturn}
+                                                className="py-3 bg-[#4A4036] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#A68A64] transition-all disabled:opacity-50"
+                                            >
+                                                Mark Completed
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs font-medium text-[#4A4036] leading-relaxed">
+                                    No return request has been submitted for this order.
+                                </p>
+                            )}
                         </div>
                     </div>
 

@@ -508,17 +508,24 @@ const ProductDetails = () => {
                                                                 <h3 className="text-base font-bold line-clamp-1" style={{ color: colors.textMain }}>
                                                                     {product.name}
                                                                 </h3>
-                                                                <div className="mt-4 flex items-center justify-between gap-3">
-                                                                    <p className="text-lg font-black" style={{ color: colors.textMain }}>₹{product.price}</p>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleAddRelatedToCart(product._id)}
-                                                                        disabled={addingRelatedId === product._id}
-                                                                        className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white transition-all active:scale-95 disabled:opacity-60"
-                                                                        style={{ backgroundColor: colors.primary }}
-                                                                    >
-                                                                        {addingRelatedId === product._id ? 'Adding...' : 'Add'}
-                                                                    </button>
+                                                                <div className="mt-3">
+                                                                    {typeof product.stock === 'number' && (
+                                                                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: product.stock <= 0 ? '#ef4444' : (product.stock <= 5 ? '#eab308' : '#5B8C5A') }}>
+                                                                            {product.stock <= 0 ? 'Out of Stock' : (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In Stock')}
+                                                                        </p>
+                                                                    )}
+                                                                    <div className="flex items-center justify-between gap-3 mt-1">
+                                                                        <p className="text-lg font-black" style={{ color: colors.textMain }}>₹{product.price}</p>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleAddRelatedToCart(product._id)}
+                                                                            disabled={addingRelatedId === product._id || product.stock <= 0}
+                                                                            className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                                            style={{ backgroundColor: product.stock <= 0 ? '#d1d5db' : colors.primary, color: product.stock <= 0 ? '#9ca3af' : 'white' }}
+                                                                        >
+                                                                            {addingRelatedId === product._id ? 'Adding...' : (product.stock <= 0 ? 'Out' : 'Add')}
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>

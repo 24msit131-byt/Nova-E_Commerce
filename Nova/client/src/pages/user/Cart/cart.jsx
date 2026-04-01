@@ -262,14 +262,25 @@ const Cart = () => {
                                     <div className="flex-1">
                                         <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: colors.primary }}>{item.product?.category}</p>
                                         <h3 className="text-lg font-bold tracking-tight" style={{ color: colors.textMain }}>{item.product?.name}</h3>
-                                        <p className="text-sm font-bold opacity-40 mt-1" style={{ color: colors.textSecondary }}>₹{item.product?.price}</p>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <p className="text-sm font-bold opacity-40" style={{ color: colors.textSecondary }}>₹{item.product?.price}</p>
+                                            {typeof item.product?.stock === 'number' && (
+                                                item.product.stock > 0 ? (
+                                                    <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: item.product.stock <= 5 ? '#eab308' : colors.success }}>
+                                                        {item.product.stock <= 5 ? `Only ${item.product.stock} left in stock` : 'In Stock'}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-red-500">Out of Stock</p>
+                                                )
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Tactile Quantity pill */}
                                     <div className="flex items-center rounded-2xl p-1 shadow-inner border bg-slate-50" style={{ borderColor: colors.accent }}>
-                                        <button onClick={() => handleQuantityChange(item.product?._id, item.quantity, -1)} className="p-3 rounded-xl hover:bg-white transition-all active:scale-90 flex items-center justify-center" style={{ color: colors.primary }} disabled={item.quantity <= 1}><FaMinus size={10} /></button>
+                                        <button onClick={() => handleQuantityChange(item.product?._id, item.quantity, -1)} className="p-3 rounded-xl hover:bg-white transition-all active:scale-90 flex items-center justify-center disabled:opacity-50" style={{ color: colors.primary }} disabled={item.quantity <= 1}><FaMinus size={10} /></button>
                                         <span className="px-4 text-base font-black" style={{ color: colors.textMain }}>{item.quantity}</span>
-                                        <button onClick={() => handleQuantityChange(item.product?._id, item.quantity, 1)} className="p-3 rounded-xl hover:bg-white transition-all active:scale-90 flex items-center justify-center" style={{ color: colors.primary }}><FaPlus size={10} /></button>
+                                        <button onClick={() => handleQuantityChange(item.product?._id, item.quantity, 1)} className="p-3 rounded-xl hover:bg-white transition-all active:scale-90 flex items-center justify-center disabled:opacity-50" style={{ color: colors.primary }} disabled={typeof item.product?.stock === 'number' && item.quantity >= item.product.stock}><FaPlus size={10} /></button>
                                     </div>
 
                                     <div className="text-right min-w-[120px]">
@@ -440,17 +451,24 @@ const Cart = () => {
                                                 <h3 className="text-base font-bold line-clamp-1" style={{ color: colors.textMain }}>
                                                     {product.name}
                                                 </h3>
-                                                <div className="mt-4 flex items-center justify-between gap-3">
-                                                    <p className="text-lg font-black" style={{ color: colors.textMain }}>₹{product.price}</p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleAddRelatedToCart(product._id)}
-                                                        disabled={addingRelatedId === product._id}
-                                                        className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white transition-all active:scale-95 disabled:opacity-60"
-                                                        style={{ backgroundColor: colors.primary }}
-                                                    >
-                                                        {addingRelatedId === product._id ? 'Adding...' : 'Add'}
-                                                    </button>
+                                                <div className="mt-3">
+                                                    {typeof product.stock === 'number' && (
+                                                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: product.stock <= 0 ? '#ef4444' : (product.stock <= 5 ? '#eab308' : '#5B8C5A') }}>
+                                                            {product.stock <= 0 ? 'Out of Stock' : (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In Stock')}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex items-center justify-between gap-3 mt-1">
+                                                        <p className="text-lg font-black" style={{ color: colors.textMain }}>₹{product.price}</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddRelatedToCart(product._id)}
+                                                            disabled={addingRelatedId === product._id || product.stock <= 0}
+                                                            className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            style={{ backgroundColor: product.stock <= 0 ? '#d1d5db' : colors.primary, color: product.stock <= 0 ? '#9ca3af' : 'white' }}
+                                                        >
+                                                            {addingRelatedId === product._id ? 'Adding...' : (product.stock <= 0 ? 'Out' : 'Add')}
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

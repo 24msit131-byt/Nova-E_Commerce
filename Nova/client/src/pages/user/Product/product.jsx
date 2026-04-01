@@ -351,14 +351,25 @@ const Products = () => {
                                                 {item.description || "Artisanally crafted with pure ingredients for a curated and minimalist home experience."}
                                             </p>
 
-                                            <div className="flex justify-between items-center mt-auto">
-                                                <p className="text-[#4A4036] font-black text-xl">₹{item.price}</p>
-                                                <button
-                                                    onClick={() => addToCart(item._id)}
-                                                    className="w-12 h-12 bg-[#FAF7F2] text-[#4A4036] rounded-full flex items-center justify-center hover:bg-[#4A4036] hover:text-white transition-all duration-300 shadow-sm border border-[#E0D8CC]/30"
-                                                >
-                                                    <HiOutlineShoppingBag size={20} />
-                                                </button>
+                                            <div className="mt-auto">
+                                                {typeof item.stock === 'number' && (
+                                                    <p className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: item.stock <= 0 ? '#ef4444' : (item.stock <= 5 ? '#eab308' : '#5B8C5A') }}>
+                                                        {item.stock <= 0 ? 'Out of Stock' : (item.stock <= 5 ? `Only ${item.stock} left in stock` : 'In Stock')}
+                                                    </p>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[#4A4036] font-black text-xl">₹{item.price}</p>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (item.stock > 0) addToCart(item._id);
+                                                        }}
+                                                        disabled={item.stock <= 0}
+                                                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm border border-[#E0D8CC]/30 ${item.stock <= 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#FAF7F2] text-[#4A4036] hover:bg-[#4A4036] hover:text-white'}`}
+                                                    >
+                                                        <HiOutlineShoppingBag size={20} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -18,6 +18,7 @@ const Checkout = () => {
     const [appliedPromo, setAppliedPromo] = useState(null);
     const [shippingDetails, setShippingDetails] = useState({
         fullName: '',
+        phoneNumber: '',
         addressLine: '',
         pincode: '',
         taluka: '',
@@ -89,7 +90,7 @@ const Checkout = () => {
             if (!user) return;
 
             if (user.role === 'admin') {
-                setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '' }));
+                setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '', phoneNumber: user.phoneNumber || '' }));
                 return;
             }
 
@@ -100,13 +101,14 @@ const Checkout = () => {
                     const fullUserData = response.data?.data?.user;
 
                     if (!fullUserData) {
-                        setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '' }));
+                        setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '', phoneNumber: user.phoneNumber || '' }));
                         return;
                     }
 
                     setShippingDetails((prev) => ({
                         ...prev,
                         fullName: fullUserData.fullName || '',
+                        phoneNumber: fullUserData.phoneNumber || '',
                         addressLine: fullUserData.addressLine || '',
                         pincode: fullUserData.pincode || '',
                         taluka: fullUserData.taluka || '',
@@ -116,7 +118,7 @@ const Checkout = () => {
                 }
             } catch (error) {
                 console.error('Error fetching full user details:', error.response?.data || error.message);
-                setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '' }));
+                setShippingDetails((prev) => ({ ...prev, fullName: user.fullName || '', phoneNumber: user.phoneNumber || '' }));
             }
         };
 
@@ -132,6 +134,25 @@ const Checkout = () => {
     const handleShippingChange = (e) => {
         const { name, value } = e.target;
         setShippingDetails((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const updateUserProfile = async () => {
+        if (!user || user.role === 'admin') return;
+
+        try {
+            await api.put('/user/profile', {
+                fullName: shippingDetails.fullName,
+                phoneNumber: shippingDetails.phoneNumber,
+                addressLine: shippingDetails.addressLine,
+                pincode: shippingDetails.pincode,
+                state: shippingDetails.state,
+                district: shippingDetails.district,
+                taluka: shippingDetails.taluka,
+                city: shippingDetails.city || shippingDetails.district
+            });
+        } catch (error) {
+            console.error('Failed to update user profile during checkout:', error);
+        }
     };
 
     const buildOrderPayload = (selectedPaymentMethod) => ({
@@ -261,6 +282,9 @@ const Checkout = () => {
         setIsProcessing(true);
 
         try {
+            // Automatically update user profile with latest shipping details
+            await updateUserProfile();
+
             if (paymentMethod === 'razorpay') {
                 await startRazorpayCheckout();
                 return;
@@ -304,9 +328,13 @@ const Checkout = () => {
                         </div>
 
                         <form className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
-                            <div className="md:col-span-2 space-y-2">
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Full Legal Name</label>
                                 <input name="fullName" value={shippingDetails.fullName} onChange={handleShippingChange} type="text" className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent" style={{ borderColor: colors.accent, color: colors.textMain }} placeholder="Rahul Prajapati" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Phone Number</label>
+                                <input name="phoneNumber" value={shippingDetails.phoneNumber} onChange={handleShippingChange} type="text" className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent" style={{ borderColor: colors.accent, color: colors.textMain }} placeholder="1234567890" />
                             </div>
                             <div className="md:col-span-2 space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Street Address / Landmark</label>

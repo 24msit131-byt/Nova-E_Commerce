@@ -128,3 +128,44 @@ To send reset links directly to user email, configure these in server `.env`:
 - `POST /api/v1/orders/razorpay/create`
 - `POST /api/v1/orders/razorpay/verify`
 - `POST /api/v1/orders/razorpay/cancel`
+
+## Order Confirmation Notifications
+
+After a checkout succeeds, Nova sends an order confirmation email and SMS in the background.
+
+### Email Content
+- Thank-you note for the customer
+- Order number
+- Payment method
+- Total amount
+- Item summary
+- Shipping location when available
+
+### SMS Content
+- Short confirmation message
+- Order number
+- Total amount
+- Item summary
+
+### Required Environment Variables for SMS
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_PHONE_NUMBER`
+
+If the SMS variables are not configured, the order still succeeds and the SMS step is skipped.
+
+## Order Return Requests
+
+Customers can request a return after an order is marked as delivered.
+
+### Customer Request
+- `POST /api/v1/orders/:id/return-request`
+- Body: `reason`
+- Requirement: the order must belong to the logged-in user and must already be delivered.
+
+### Admin Review
+- `PATCH /api/v1/orders/:id/return-request`
+- Body: `status` and optional `adminNote`
+- Allowed statuses: `Approved`, `Rejected`, `Completed`
+
+Return requests are stored on the order record so both the profile page and admin order-details page can show the latest return state.

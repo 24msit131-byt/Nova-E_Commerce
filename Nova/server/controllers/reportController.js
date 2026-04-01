@@ -4,6 +4,17 @@ import User from '../models/User.js';
 import Admin from '../models/Admin.js';
 import * as XLSX from 'xlsx';
 
+const formatDate = (value) => {
+    if (!value) return '';
+    return new Date(value).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
 // @desc    Get dashboard stats
 // @route   GET /api/v1/reports/stats
 // @access  Private/Admin

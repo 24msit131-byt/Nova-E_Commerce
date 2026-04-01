@@ -94,6 +94,27 @@ const orderSchema = new mongoose.Schema({
     adminNotes: {
         type: String,
         default: ''
+    },
+    returnRequest: {
+        status: {
+            type: String,
+            enum: ['None', 'Requested', 'Approved', 'Rejected', 'Completed'],
+            default: 'None'
+        },
+        reason: {
+            type: String,
+            default: ''
+        },
+        adminNote: {
+            type: String,
+            default: ''
+        },
+        requestedAt: {
+            type: Date
+        },
+        processedAt: {
+            type: Date
+        }
     }
 }, {
     timestamps: true

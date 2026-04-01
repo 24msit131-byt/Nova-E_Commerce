@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaBox, FaMapMarkedAlt, FaShieldAlt, FaStar, FaTimes } from 'react-icons/fa';
+import { FaBox, FaExchangeAlt, FaMapMarkedAlt, FaShieldAlt, FaStar, FaTimes } from 'react-icons/fa';
 import api from '../../../services/api';
 import Footer from '../../../components/Footer';
 
@@ -33,12 +33,37 @@ const getProductName = (item) => {
   return 'Product';
 };
 
+const getReturnRequestState = (order) => {
+  const status = order?.returnRequest?.status || 'None';
+
+  switch (status) {
+    case 'Requested':
+      return { label: 'Return Requested', className: 'bg-amber-50 text-amber-700 border border-amber-100' };
+    case 'Approved':
+      return { label: 'Return Approved', className: 'bg-blue-50 text-blue-700 border border-blue-100' };
+    case 'Rejected':
+      return { label: 'Return Rejected', className: 'bg-red-50 text-red-700 border border-red-100' };
+    case 'Completed':
+      return { label: 'Returned', className: 'bg-green-50 text-green-700 border border-green-100' };
+    default:
+      return { label: 'No Return Request', className: 'bg-slate-50 text-slate-500 border border-slate-100' };
+  }
+};
+
 const Profile = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [isLoading, setIsLoading] = useState(true);
   const [saveState, setSaveState] = useState({ status: 'idle', message: '' });
   const [orders, setOrders] = useState([]);
   const [orderState, setOrderState] = useState({ status: 'idle', message: '' });
+  const [returnModal, setReturnModal] = useState({
+    isOpen: false,
+    orderId: null,
+    orderLabel: '',
+    reason: '',
+    status: 'idle',
+    message: ''
+  });
 
   // Review Modal State
   const [reviewModal, setReviewModal] = useState({
@@ -107,22 +132,22 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      setOrderState({ status: 'loading', message: '' });
-      try {
-        const response = await api.get('/orders/my');
-        setOrders(response.data?.data || []);
-        setOrderState({ status: 'success', message: '' });
-      } catch (error) {
-        console.error('Order load error:', error.response?.data || error.message);
-        setOrderState({
-          status: 'error',
-          message: error.response?.data?.message || 'Failed to load your orders.'
-        });
-      }
-    };
+  const fetchOrders = async () => {
+    setOrderState({ status: 'loading', message: '' });
+    try {
+      const response = await api.get('/orders/my');
+      setOrders(response.data?.data || []);
+      setOrderState({ status: 'success', message: '' });
+    } catch (error) {
+      console.error('Order load error:', error.response?.data || error.message);
+      setOrderState({
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to load your orders.'
+      });
+    }
+  };
 
+  useEffect(() => {
     fetchOrders();
   }, []);
 
@@ -217,6 +242,60 @@ const Profile = () => {
         ...prev,
         status: 'error',
         message: error.response?.data?.message || 'Failed to submit review'
+      }));
+    }
+  };
+
+  const handleOpenReturnModal = (order) => {
+    const shortOrderId = `#${order._id?.slice(-8)?.toUpperCase() || 'N/A'}`;
+
+    setReturnModal({
+      isOpen: true,
+      orderId: order._id,
+      orderLabel: shortOrderId,
+      reason: '',
+      status: 'idle',
+      message: ''
+    });
+  };
+
+  const handleCloseReturnModal = () => {
+    setReturnModal({
+      isOpen: false,
+      orderId: null,
+      orderLabel: '',
+      reason: '',
+      status: 'idle',
+      message: ''
+    });
+  };
+
+  const handleReturnSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!returnModal.reason.trim()) {
+      setReturnModal(prev => ({ ...prev, status: 'error', message: 'Please share a return reason.' }));
+      return;
+    }
+
+    setReturnModal(prev => ({ ...prev, status: 'loading', message: '' }));
+
+    try {
+      await api.post(`/orders/${returnModal.orderId}/return-request`, {
+        reason: returnModal.reason
+      });
+
+      setReturnModal(prev => ({ ...prev, status: 'success', message: 'Return request submitted successfully.' }));
+      await fetchOrders();
+
+      setTimeout(() => {
+        handleCloseReturnModal();
+      }, 2000);
+    } catch (error) {
+      setReturnModal(prev => ({
+        ...prev,
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to submit return request.'
       }));
     }
   };
@@ -496,6 +575,8 @@ const Profile = () => {
 
                   {orders.map((order) => {
                     const { activeStep, isCancelled } = getStepState(order.status);
+                    const returnState = getReturnRequestState(order);
+                    const canRequestReturn = order.status === 'Delivered' && (!order.returnRequest || ['None', 'Rejected'].includes(order.returnRequest.status));
                     const shortOrderId = `#${order._id?.slice(-8)?.toUpperCase() || 'N/A'}`;
 
                     return (
@@ -642,6 +723,30 @@ const Profile = () => {
                             </p>
                           </div>
                         </div>
+
+                        <div className="mt-6 pt-6 border-t flex flex-col md:flex-row md:items-center md:justify-between gap-4" style={{ borderColor: 'rgba(214, 201, 181, 0.35)' }}>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className={`inline-flex px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${returnState.className}`}>
+                              {returnState.label}
+                            </span>
+                            {order.returnRequest?.reason && order.returnRequest.status !== 'None' && (
+                              <p className="text-xs font-medium" style={{ color: colors.textSecondary }}>
+                                Reason: {order.returnRequest.reason}
+                              </p>
+                            )}
+                          </div>
+
+                          {canRequestReturn && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReturnModal(order)}
+                              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border"
+                              style={{ color: colors.primary, borderColor: colors.accent, backgroundColor: 'white' }}
+                            >
+                              <FaExchangeAlt /> Request Return
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -708,6 +813,55 @@ const Profile = () => {
                 style={{ backgroundColor: colors.deepBg }}
               >
                 {reviewModal.status === 'loading' ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {returnModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[24px] p-8 relative shadow-2xl border" style={{ borderColor: colors.accent }}>
+            <button
+              onClick={handleCloseReturnModal}
+              className="absolute top-6 right-6 text-gray-400 hover:text-gray-800 transition-colors"
+            >
+              <FaTimes size={20} />
+            </button>
+
+            <h3 className="text-2xl font-black uppercase tracking-tighter mb-2" style={{ color: colors.textMain }}>Request Return</h3>
+            <p className="text-sm opacity-60 font-bold mb-6" style={{ color: colors.textSecondary }}>
+              Order {returnModal.orderLabel}
+            </p>
+
+            <form onSubmit={handleReturnSubmit} className="space-y-6">
+              {returnModal.message && (
+                <div className={`p-4 rounded-xl text-sm font-bold ${returnModal.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {returnModal.message}
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 mb-2 block" style={{ color: colors.textMain }}>
+                  Return Reason
+                </label>
+                <textarea
+                  required
+                  value={returnModal.reason}
+                  onChange={(e) => setReturnModal(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Tell us why you want to return this order..."
+                  className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-amber-700 transition-colors min-h-[140px] resize-none"
+                  style={{ color: colors.textMain }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={returnModal.status === 'loading' || returnModal.status === 'success'}
+                className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-sm transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: colors.deepBg }}
+              >
+                {returnModal.status === 'loading' ? 'Submitting...' : 'Submit Return Request'}
               </button>
             </form>
           </div>

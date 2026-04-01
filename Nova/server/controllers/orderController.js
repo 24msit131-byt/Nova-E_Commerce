@@ -3,6 +3,7 @@ import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
 import PromoCode from '../models/PromoCode.js';
 import Product from '../models/Product.js';
+import { sendOrderNotifications } from '../utils/orderNotifications.js';
 
 const rollbackStock = async (updatedItems) => {
     if (!updatedItems.length) return;
@@ -132,6 +133,8 @@ const incrementPromoUsage = async (promoCodeValue) => {
     );
 };
 
+const getReturnRequestStatus = (order) => String(order?.returnRequest?.status || 'None');
+
 // @desc    Create new order
 // @route   POST /api/v1/orders
 // @access  Private
@@ -183,6 +186,8 @@ export const createOrder = async (req, res) => {
         } catch (promoError) {
             console.error('Failed to record promo usage for COD order:', promoError);
         }
+
+        void sendOrderNotifications({ order: createdOrder, user: req.user });
 
         res.status(201).json({
             success: true,
@@ -358,6 +363,8 @@ export const verifyRazorpayPayment = async (req, res) => {
             console.error('Failed to record promo usage for Razorpay order:', promoError);
         }
 
+        void sendOrderNotifications({ order, user: req.user });
+
         res.status(200).json({
             success: true,
             data: order
@@ -416,6 +423,123 @@ export const cancelRazorpayPayment = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Request order return
+// @route   POST /api/v1/orders/:id/return-request
+// @access  Private
+export const requestOrderReturn = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        if (String(order.user) !== String(req.user._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not allowed to return this order'
+            });
+        }
+
+        if (String(order.status) !== 'Delivered') {
+            return res.status(400).json({
+                success: false,
+                message: 'You can request a return only after the order is delivered'
+            });
+        }
+
+        const currentReturnStatus = getReturnRequestStatus(order);
+
+        if (['Requested', 'Approved', 'Completed'].includes(currentReturnStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: 'A return request already exists for this order'
+            });
+        }
+
+        const reason = String(req.body?.reason || '').trim();
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a reason for the return request'
+            });
+        }
+
+        order.returnRequest = {
+            status: 'Requested',
+            reason,
+            adminNote: '',
+            requestedAt: new Date(),
+            processedAt: null
+        };
+
+        await order.save();
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Review order return request
+// @route   PATCH /api/v1/orders/:id/return-request
+// @access  Private/Admin
+export const updateOrderReturnRequest = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        const status = String(req.body?.status || '').trim();
+        const adminNote = String(req.body?.adminNote || '').trim();
+
+        if (!['Approved', 'Rejected', 'Completed'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid return request status'
+            });
+        }
+
+        if (getReturnRequestStatus(order) !== 'Requested') {
+            return res.status(400).json({
+                success: false,
+                message: 'There is no pending return request to review'
+            });
+        }
+
+        order.returnRequest.status = status;
+        order.returnRequest.adminNote = adminNote;
+        order.returnRequest.processedAt = new Date();
+
+        await order.save();
+
+        res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        res.status(400).json({
             success: false,
             message: error.message
         });

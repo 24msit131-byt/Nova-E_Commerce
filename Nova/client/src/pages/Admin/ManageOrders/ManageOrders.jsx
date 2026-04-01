@@ -42,25 +42,17 @@ const ManageOrders = () => {
     const handleDownloadCSV = async () => {
         try {
             setDownloading(true);
-            const params = new URLSearchParams();
-            if (reportFilters.category !== 'All') params.append('category', reportFilters.category);
-            if (reportFilters.lowStock) params.append('lowStock', 'true');
-            if (reportFilters.startDate) params.append('startDate', reportFilters.startDate);
-            if (reportFilters.endDate) params.append('endDate', reportFilters.endDate);
-            if (reportFilters.search) params.append('search', reportFilters.search);
-
-            const response = await api.get(`/reports/inventory?${params.toString()}`, {
+            const response = await api.get('/reports/orders', {
                 responseType: 'blob'
             });
 
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', 'inventory.xlsx');
+            link.setAttribute('download', 'orders_report.xlsx');
             document.body.appendChild(link);
             link.click();
             link.remove();
-            setIsReportModalOpen(false);
         } catch (err) {
             console.error('Error downloading CSV:', err);
             setError('Failed to download report. Please try again.');
@@ -76,6 +68,10 @@ const ManageOrders = () => {
 
     // Updated status styling to match the organic theme
     const getStatusInfo = (order) => {
+        if (order.returnRequest?.status === 'Requested') return { label: 'Return Requested', class: 'bg-amber-100 text-amber-800', icon: <FaClock className="mr-1" /> };
+        if (order.returnRequest?.status === 'Approved') return { label: 'Return Approved', class: 'bg-blue-100 text-blue-800', icon: <FaShippingFast className="mr-1" /> };
+        if (order.returnRequest?.status === 'Rejected') return { label: 'Return Rejected', class: 'bg-red-100 text-red-800', icon: <FaTimes className="mr-1" /> };
+        if (order.returnRequest?.status === 'Completed') return { label: 'Returned', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
         if (order.isDelivered) return { label: 'Delivered', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
         if (order.isPaid) return { label: 'Shipped', class: 'bg-[#E0D8CC] text-[#4A4036]', icon: <FaShippingFast className="mr-1" /> };
         return { label: 'Processing', class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1 animate-spin-slow" /> };
@@ -210,10 +206,12 @@ const ManageOrders = () => {
                         </p>
                         <div className="flex space-x-4">
                             <button
-                                onClick={() => setIsReportModalOpen(true)}
-                                className="text-[11px] font-black text-[#A68A64] uppercase tracking-widest hover:text-[#4A4036] transition-colors underline decoration-dotted"
+                                onClick={handleDownloadCSV}
+                                disabled={downloading}
+                                className="flex items-center space-x-2 text-[11px] font-black text-[#A68A64] uppercase tracking-widest hover:text-[#4A4036] transition-colors underline decoration-dotted disabled:opacity-50"
                             >
-                                Download CSV Report
+                                <FaDownload />
+                                <span>{downloading ? 'Generating Report...' : 'Download Orders Report'}</span>
                             </button>
                         </div>
                     </div>
@@ -319,7 +317,7 @@ const ManageOrders = () => {
                                     ) : (
                                         <>
                                             <FaDownload />
-                                            <span>Generate & Download CSV</span>
+                                            <span>Generate & Download Report</span>
                                         </>
                                     )}
                                 </button>
