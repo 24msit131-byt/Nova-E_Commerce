@@ -1,24 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaBox, FaExchangeAlt, FaMapMarkedAlt, FaShieldAlt, FaStar, FaTimes } from 'react-icons/fa';
+import { FaBox, FaExchangeAlt, FaMapMarkedAlt, FaShieldAlt, FaStar, FaTimes, FaCheckCircle } from 'react-icons/fa';
 import api from '../../../services/api';
 import Footer from '../../../components/Footer';
 
-const ORDER_STEPS = ['Processing', 'Packed', 'Shipped', 'Delivered'];
+const ORDER_STEPS = ['Placed', 'Pending', 'Processing', 'Packed', 'Shipped', 'Delivered'];
 
 const getStepState = (status) => {
   if (status === 'Cancelled') {
-    return {
-      activeStep: -1,
-      isCancelled: true
-    };
+    return { activeStep: -1, isCancelled: true };
   }
-
   const normalizedStatus = ORDER_STEPS.includes(status) ? status : 'Processing';
-  return {
-    activeStep: ORDER_STEPS.indexOf(normalizedStatus),
-    isCancelled: false
-  };
+  const finalStatus = ['Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) ? 'Delivered' : normalizedStatus;
+  return { activeStep: ORDER_STEPS.indexOf(finalStatus), isCancelled: false };
+};
+
+/* Order Tracker Milestone Component */
+const OrderTracker = ({ status, colors }) => {
+  const { isCancelled } = getStepState(status);
+  const steps = [
+    { label: "Placed", done: true },
+    { label: "Pending", done: ['Pending', 'Processing', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Processing", done: ['Processing', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Packed", done: ['Packed', 'Shipped', 'Delivered', 'Cancelled', 'Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Shipped", done: ['Shipped', 'Delivered', 'Cancelled', 'Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Delivered", done: ['Delivered', 'Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Return Req", done: ['Return Request', 'Return Approved', 'Return Rejected', 'Returned'].includes(status) },
+    { label: "Return Appr", done: ['Return Approved', 'Returned'].includes(status) },
+    { label: "Return Rej", done: status === 'Return Rejected', isError: status === 'Return Rejected' }
+  ];
+
+  return (
+    <div className="mt-8 bg-[#FAF7F2] rounded-[1.5rem] p-6 border border-[#D6C9B5]">
+      <div className="flex justify-between items-start relative px-2">
+        <div className="absolute top-3 left-0 w-full h-[2px] bg-[#E0D8CC] z-0"></div>
+        {steps.map((step, i) => (
+          <div key={i} className="relative z-10 flex flex-col items-center flex-1">
+            <div className={`h-6 w-6 rounded-full flex items-center justify-center border-2 border-white shadow-sm transition-all duration-500 
+                ${step.done ? (step.isError ? 'bg-red-500 text-white' : 'bg-[#A68A64] text-white') : 'bg-white text-[#E0D8CC]'}`}>
+              {step.isError ? <FaTimes size={10} /> : <FaCheckCircle size={10} />}
+            </div>
+            <p className={`text-[7px] font-black uppercase tracking-tighter mt-3 whitespace-nowrap ${step.done ? 'text-[#4A4036] opacity-100' : 'text-[#756A5E] opacity-40'}`}>
+              {step.label}
+            </p>
+          </div>
+        ))}
+      </div>
+      {isCancelled && (
+        <div className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 border border-red-100">
+          <FaTimes className="text-red-600" size={10} />
+          <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest">Order has been cancelled</p>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const getProductId = (product) => {
@@ -611,36 +646,7 @@ const Profile = () => {
                         </div>
 
                         <div className="mt-8">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {ORDER_STEPS.map((step, index) => {
-                              const completed = !isCancelled && index <= activeStep;
-                              return (
-                                <div key={`${order._id}-${step}`} className="flex items-center gap-3">
-                                  <div
-                                    className="h-7 w-7 rounded-full border flex items-center justify-center text-[10px] font-black"
-                                    style={{
-                                      borderColor: completed ? colors.primary : colors.accent,
-                                      color: completed ? 'white' : colors.textSecondary,
-                                      backgroundColor: completed ? colors.primary : 'transparent'
-                                    }}
-                                  >
-                                    {index + 1}
-                                  </div>
-                                  <span
-                                    className="text-[10px] font-black uppercase tracking-widest"
-                                    style={{ color: completed ? colors.textMain : colors.textSecondary, opacity: completed ? 1 : 0.7 }}
-                                  >
-                                    {step}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {isCancelled && (
-                            <p className="mt-5 text-xs font-bold text-red-600">
-                              This order has been cancelled and will not move through further tracking steps.
-                            </p>
-                          )}
+                          <OrderTracker status={order.status} colors={colors} />
                         </div>
 
                         <div className="mt-8 pt-6 border-t" style={{ borderColor: 'rgba(214, 201, 181, 0.35)' }}>

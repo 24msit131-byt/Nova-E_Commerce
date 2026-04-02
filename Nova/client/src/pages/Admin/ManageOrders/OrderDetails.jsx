@@ -2,11 +2,57 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
     FaArrowLeft, FaPrint, FaTruck, FaUser, FaCreditCard,
-    FaBox, FaMapMarkerAlt, FaCheckCircle, FaClock, FaMobileAlt, FaStickyNote, FaShippingFast, FaExchangeAlt
+    FaBox, FaMapMarkerAlt, FaCheckCircle, FaClock, FaMobileAlt, FaStickyNote, FaShippingFast, FaExchangeAlt, FaTimes
 } from 'react-icons/fa';
 import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 import { toast } from 'react-toastify';
+
+const RETURN_FLOW_STATUSES = ['Requested', 'Approved', 'Rejected', 'Completed'];
+const LEGACY_RETURN_STATUS_LABELS = ['Return Request', 'Return Approved', 'Return Rejected', 'Returned'];
+const FULFILLMENT_STATUS_OPTIONS = ['Placed', 'Pending', 'Processing', 'Packed', 'Shipped', 'Delivered'];
+
+const getFulfillmentSteps = ({ status, returnRequestStatus }) => {
+    const hasReturnFlow = RETURN_FLOW_STATUSES.includes(returnRequestStatus) || LEGACY_RETURN_STATUS_LABELS.includes(status);
+    const isCancelled = status === 'Cancelled';
+
+    const steps = [
+        { label: 'Placed', done: true },
+        { label: 'Pending', done: ['Pending', 'Processing', 'Packed', 'Shipped', 'Delivered', ...LEGACY_RETURN_STATUS_LABELS].includes(status) || isCancelled },
+        { label: 'Processing', done: ['Processing', 'Packed', 'Shipped', 'Delivered', ...LEGACY_RETURN_STATUS_LABELS].includes(status) || isCancelled },
+        { label: 'Packed', done: ['Packed', 'Shipped', 'Delivered', ...LEGACY_RETURN_STATUS_LABELS].includes(status) || isCancelled },
+        { label: 'Shipped', done: ['Shipped', 'Delivered', ...LEGACY_RETURN_STATUS_LABELS].includes(status) || isCancelled },
+        { label: 'Delivered', done: ['Delivered', ...LEGACY_RETURN_STATUS_LABELS].includes(status) },
+    ];
+
+    if (isCancelled) {
+        steps.push({ label: 'Cancelled', done: true, isError: true });
+    }
+
+    if (hasReturnFlow) {
+        const isRejected = returnRequestStatus === 'Rejected' || status === 'Return Rejected';
+        const isApproved = returnRequestStatus === 'Approved' || status === 'Return Approved';
+        const isReturned = returnRequestStatus === 'Completed' || status === 'Returned';
+
+        steps.push({ label: 'Return Request', done: true });
+
+        if (isRejected) {
+            steps.push({ label: 'Return Rejected', done: true, isError: true });
+        } else if (isReturned) {
+            steps.push({ label: 'Return Approved', done: true });
+            steps.push({ label: 'Returned', done: true });
+        } else if (isApproved) {
+            steps.push({ label: 'Return Approved', done: true });
+            steps.push({ label: 'Returned', done: false });
+        } else {
+            steps.push({ label: 'Return Approved', done: false });
+        }
+    }
+
+    return steps;
+};
+
+const isOrderCancellable = (status) => !['Delivered', 'Cancelled'].includes(status);
 
 const OrderDetail = () => {
     const { id } = useParams();
@@ -55,6 +101,8 @@ const OrderDetail = () => {
         }
     };
 
+    const handleCancelOrder = () => handleStatusChange('Cancelled');
+
     const handleUpdateDetails = async () => {
         try {
             setUpdatingDetails(true);
@@ -99,10 +147,10 @@ const OrderDetail = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#FAF7F2] flex w-full overflow-x-hidden font-sans">
+        <div className="h-screen bg-[#FAF7F2] flex w-full overflow-hidden font-sans">
             <AdminSidebar />
 
-            <main className="flex-1 p-6 md:p-10 lg:p-16">
+            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto">
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                     <div className="flex items-center space-x-6">
                         <Link to="/admin/orders" className="h-12 w-12 bg-white border border-[#E0D8CC] rounded-xl flex items-center justify-center text-[#A68A64] hover:bg-[#FAF7F2] transition-all shadow-sm">
@@ -123,17 +171,34 @@ const OrderDetail = () => {
                         <button className="flex items-center space-x-2 px-6 py-4 bg-white text-[#4A4036] border border-[#E0D8CC] rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-[#F5F5F5] transition-all">
                             <FaPrint /> <span>Print Invoice</span>
                         </button>
+                        {isOrderCancellable(status) && (
+                            <button
+                                onClick={handleCancelOrder}
+                                disabled={updatingStatus}
+                                className="flex items-center space-x-2 px-6 py-4 bg-red-600 text-white border border-red-600 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg disabled:opacity-50"
+                            >
+                                <FaTimes /> <span>Cancel Order</span>
+                            </button>
+                        )}
                         <select
                             value={status}
                             onChange={(e) => handleStatusChange(e.target.value)}
                             disabled={updatingStatus}
                             className="bg-[#4A4036] text-white px-6 py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest outline-none cursor-pointer hover:bg-[#A68A64] transition-all shadow-lg disabled:opacity-50"
                         >
-                            <option value="Processing">Processing</option>
-                            <option value="Packed">Packed</option>
-                            <option value="Shipped">Shipped</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>
+                            {LEGACY_RETURN_STATUS_LABELS.includes(status) && (
+                                <option value={status} disabled>
+                                    {status}
+                                </option>
+                            )}
+                            {FULFILLMENT_STATUS_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                            {(isOrderCancellable(status) || status === 'Cancelled') && (
+                                <option value="Cancelled">Cancelled</option>
+                            )}
                         </select>
                     </div>
                 </header>
@@ -141,23 +206,22 @@ const OrderDetail = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* LEFT COLUMN: Logistics & Inventory */}
                     <div className="lg:col-span-2 space-y-8">
-                        
+
                         {/* Order Timeline */}
                         <div className="bg-white rounded-3xl border border-[#E0D8CC] p-10 shadow-sm">
                             <h3 className="text-[10px] font-black text-[#A68A64] uppercase tracking-[0.2em] mb-12">Fulfillment Progression</h3>
                             <div className="flex justify-between relative px-4">
                                 <div className="absolute top-4 left-0 w-full h-0.5 bg-[#FAF7F2] z-0"></div>
-                                {[
-                                    { label: "Placed", done: true },
-                                    { label: "Processing", done: status !== "Cancelled" },
-                                    { label: "Shipped", done: status === "Shipped" || status === "Delivered" },
-                                    { label: "Delivered", done: status === "Delivered" }
-                                ].map((step, i) => (
+                                {getFulfillmentSteps({
+                                    status,
+                                    returnRequestStatus: order.returnRequest?.status
+                                }).map((step, i) => (
                                     <div key={i} className="relative z-10 flex flex-col items-center">
-                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm ${step.done ? 'bg-[#A68A64] text-white' : 'bg-[#F5F5F5] text-[#E0D8CC]'}`}>
-                                            <FaCheckCircle size={12} />
+                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm transition-colors duration-500 
+                                            ${step.done ? (step.isError ? 'bg-red-500 text-white' : 'bg-[#A68A64] text-white') : 'bg-[#F5F5F5] text-[#E0D8CC]'}`}>
+                                            {step.isError ? <FaTimes size={12} /> : <FaCheckCircle size={12} />}
                                         </div>
-                                        <p className="text-[10px] font-bold text-[#4A4036] uppercase mt-4">{step.label}</p>
+                                        <p className="text-[6.5px] font-bold text-[#4A4036] uppercase mt-4 whitespace-nowrap">{step.label}</p>
                                     </div>
                                 ))}
                             </div>
@@ -244,7 +308,7 @@ const OrderDetail = () => {
                                     </div>
 
                                     {order.returnRequest.status === 'Requested' && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <button
                                                 onClick={() => handleReturnRequestUpdate('Approved')}
                                                 disabled={updatingReturn}
@@ -259,12 +323,17 @@ const OrderDetail = () => {
                                             >
                                                 Reject
                                             </button>
+                                        </div>
+                                    )}
+
+                                    {order.returnRequest.status === 'Approved' && (
+                                        <div className="grid grid-cols-1 gap-3">
                                             <button
                                                 onClick={() => handleReturnRequestUpdate('Completed')}
                                                 disabled={updatingReturn}
                                                 className="py-3 bg-[#4A4036] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#A68A64] transition-all disabled:opacity-50"
                                             >
-                                                Mark Completed
+                                                Returned
                                             </button>
                                         </div>
                                     )}

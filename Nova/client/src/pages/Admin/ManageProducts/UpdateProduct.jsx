@@ -100,10 +100,10 @@ const UpdateProduct = () => {
     );
 
     return (
-        <div className="min-h-screen bg-[#FAF7F2] flex w-full overflow-x-hidden font-sans">
+        <div className="h-screen bg-[#FAF7F2] flex w-full overflow-hidden font-sans">
             <AdminSidebar />
 
-            <main className="flex-1 p-6 md:p-10 lg:p-16">
+            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto">
                 {/* Header Section */}
                 <header className="flex items-center justify-between mb-12">
                     <div className="flex items-center space-x-6">

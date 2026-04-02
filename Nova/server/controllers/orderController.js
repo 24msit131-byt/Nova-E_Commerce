@@ -513,6 +513,7 @@ export const updateOrderReturnRequest = async (req, res) => {
 
         const status = String(req.body?.status || '').trim();
         const adminNote = String(req.body?.adminNote || '').trim();
+        const currentReturnStatus = getReturnRequestStatus(order);
 
         if (!['Approved', 'Rejected', 'Completed'].includes(status)) {
             return res.status(400).json({
@@ -521,7 +522,28 @@ export const updateOrderReturnRequest = async (req, res) => {
             });
         }
 
-        if (getReturnRequestStatus(order) !== 'Requested') {
+        if (status === 'Completed') {
+            if (currentReturnStatus !== 'Approved') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Return can only be marked completed after approval'
+                });
+            }
+
+            order.returnRequest.status = 'Completed';
+            order.returnRequest.adminNote = adminNote || order.returnRequest.adminNote;
+            order.returnRequest.processedAt = new Date();
+            order.status = 'Returned';
+
+            await order.save();
+
+            return res.status(200).json({
+                success: true,
+                data: order
+            });
+        }
+
+        if (currentReturnStatus !== 'Requested') {
             return res.status(400).json({
                 success: false,
                 message: 'There is no pending return request to review'

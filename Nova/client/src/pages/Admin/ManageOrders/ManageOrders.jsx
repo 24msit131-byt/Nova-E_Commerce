@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSearch, FaShippingFast, FaCheckCircle, FaFilter, FaArrowRight, FaClock, FaTimes, FaDownload, FaCalendarAlt, FaBoxOpen } from 'react-icons/fa';
+import { FaSearch, FaShippingFast, FaCheckCircle, FaFilter, FaArrowRight, FaClock, FaTimes, FaDownload, FaCalendarAlt, FaBoxOpen, FaExchangeAlt } from 'react-icons/fa';
 import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 
@@ -68,13 +68,67 @@ const ManageOrders = () => {
 
     // Updated status styling to match the organic theme
     const getStatusInfo = (order) => {
-        if (order.returnRequest?.status === 'Requested') return { label: 'Return Requested', class: 'bg-amber-100 text-amber-800', icon: <FaClock className="mr-1" /> };
-        if (order.returnRequest?.status === 'Approved') return { label: 'Return Approved', class: 'bg-blue-100 text-blue-800', icon: <FaShippingFast className="mr-1" /> };
-        if (order.returnRequest?.status === 'Rejected') return { label: 'Return Rejected', class: 'bg-red-100 text-red-800', icon: <FaTimes className="mr-1" /> };
-        if (order.returnRequest?.status === 'Completed') return { label: 'Returned', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
-        if (order.isDelivered) return { label: 'Delivered', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
-        if (order.isPaid) return { label: 'Shipped', class: 'bg-[#E0D8CC] text-[#4A4036]', icon: <FaShippingFast className="mr-1" /> };
-        return { label: 'Processing', class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1 animate-spin-slow" /> };
+        const s = order.status || 'Processing';
+        switch (s) {
+            case 'Placed': return { label: 'Placed', class: 'bg-blue-50 text-blue-600 border border-blue-100', icon: <FaClock className="mr-1" /> };
+            case 'Pending': return { label: 'Pending', class: 'bg-amber-50 text-amber-600 border border-amber-100', icon: <FaClock className="mr-1" /> };
+            case 'Processing': return { label: 'Processing', class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1 animate-spin-slow" /> };
+            case 'Packed': return { label: 'Packed', class: 'bg-indigo-50 text-indigo-600 border border-indigo-100', icon: <FaShippingFast className="mr-1" /> };
+            case 'Shipped': return { label: 'Shipped', class: 'bg-[#E0D8CC] text-[#4A4036]', icon: <FaShippingFast className="mr-1" /> };
+            case 'Delivered': return { label: 'Delivered', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
+            case 'Cancelled': return { label: 'Cancelled', class: 'bg-red-50 text-red-600 border border-red-100', icon: <FaTimes className="mr-1" /> };
+            case 'Return Request': return { label: 'Return Req', class: 'bg-orange-50 text-orange-600 border border-orange-100', icon: <FaClock className="mr-1" /> };
+            case 'Return Approved': return { label: 'Ret Approved', class: 'bg-blue-50 text-blue-600 border border-blue-100', icon: <FaCheckCircle className="mr-1" /> };
+            case 'Return Rejected': return { label: 'Ret Rejected', class: 'bg-red-50 text-red-600 border border-red-100', icon: <FaTimes className="mr-1" /> };
+            case 'Returned': return { label: 'Returned', class: 'bg-gray-100 text-gray-700 border border-gray-200', icon: <FaExchangeAlt className="mr-1" /> };
+            default: return { label: s, class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1" /> };
+        }
+    };
+
+    const getProgressStage = (order) => {
+        const fulfillmentStatus = order.status || 'Processing';
+        const returnStatus = order.returnRequest?.status;
+
+        if (returnStatus === 'Rejected' || fulfillmentStatus === 'Return Rejected') {
+            return { label: 'Return Rejected', class: 'text-red-600' };
+        }
+
+        if (returnStatus === 'Completed' || fulfillmentStatus === 'Returned') {
+            return { label: 'Returned', class: 'text-gray-700' };
+        }
+
+        if (returnStatus === 'Approved' || fulfillmentStatus === 'Return Approved') {
+            return { label: 'Return Approved', class: 'text-blue-600' };
+        }
+
+        if (returnStatus === 'Requested' || fulfillmentStatus === 'Return Request') {
+            return { label: 'Return Request', class: 'text-orange-600' };
+        }
+
+        if (fulfillmentStatus === 'Cancelled') {
+            return { label: 'Cancelled', class: 'text-red-600' };
+        }
+
+        return { label: fulfillmentStatus, class: 'text-[#A68A64]' };
+    };
+
+    const getDisplayStatusInfo = (order) => {
+        const stage = getProgressStage(order).label;
+
+        switch (stage) {
+            case 'Placed': return { label: 'Placed', class: 'bg-blue-50 text-blue-600 border border-blue-100', icon: <FaClock className="mr-1" /> };
+            case 'Pending': return { label: 'Pending', class: 'bg-amber-50 text-amber-600 border border-amber-100', icon: <FaClock className="mr-1" /> };
+            case 'Processing': return { label: 'Processing', class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1 animate-spin-slow" /> };
+            case 'Packed': return { label: 'Packed', class: 'bg-indigo-50 text-indigo-600 border border-indigo-100', icon: <FaShippingFast className="mr-1" /> };
+            case 'Shipped': return { label: 'Shipped', class: 'bg-[#E0D8CC] text-[#4A4036]', icon: <FaShippingFast className="mr-1" /> };
+            case 'Delivered': return { label: 'Delivered', class: 'bg-green-100 text-green-800', icon: <FaCheckCircle className="mr-1" /> };
+            case 'Cancelled': return { label: 'Cancelled', class: 'bg-red-50 text-red-600 border border-red-100', icon: <FaTimes className="mr-1" /> };
+            case 'Return Request': return { label: 'Return Request', class: 'bg-orange-50 text-orange-600 border border-orange-100', icon: <FaClock className="mr-1" /> };
+            case 'Return Approved': return { label: 'Return Approved', class: 'bg-blue-50 text-blue-600 border border-blue-100', icon: <FaCheckCircle className="mr-1" /> };
+            case 'Return Rejected': return { label: 'Return Rejected', class: 'bg-red-50 text-red-600 border border-red-100', icon: <FaTimes className="mr-1" /> };
+            case 'Returned': return { label: 'Returned', class: 'bg-gray-100 text-gray-700 border border-gray-200', icon: <FaExchangeAlt className="mr-1" /> };
+            default: return { label: stage, class: 'bg-[#FAF7F2] border border-[#E0D8CC] text-[#A68A64]', icon: <FaClock className="mr-1" /> };
+        }
     };
 
     if (loading) {
@@ -88,11 +142,22 @@ const ManageOrders = () => {
         );
     }
 
+    const stats = [
+        { label: 'Total number of placed order', value: orders.length, icon: <FaBoxOpen />, color: 'bg-[#A68A64]' },
+        { label: 'Total under pending order', value: orders.filter(o => o.status === 'Pending').length, icon: <FaClock />, color: 'bg-[#4A4036]' },
+        { label: 'Under proccessing order', value: orders.filter(o => o.status === 'Processing').length, icon: <FaClock />, color: 'bg-[#A68A64]' },
+        { label: 'Total packed order', value: orders.filter(o => o.status === 'Packed').length, icon: <FaShippingFast />, color: 'bg-[#4A4036]' },
+        { label: 'Total shiped order', value: orders.filter(o => o.status === 'Shipped').length, icon: <FaShippingFast />, color: 'bg-[#A68A64]' },
+        { label: 'Total delevard order', value: orders.filter(o => o.status === 'Delivered').length, icon: <FaCheckCircle />, color: 'bg-[#4A4036]' },
+        { label: 'Total number of cancel order', value: orders.filter(o => o.status === 'Cancelled').length, icon: <FaTimes />, color: 'bg-[#A68A64]' },
+        { label: 'Total number of return order', value: orders.filter(o => ['Return Request', 'Return Approved', 'Returned'].includes(o.status)).length, icon: <FaExchangeAlt />, color: 'bg-[#4A4036]' },
+    ];
+
     return (
-        <div className="min-h-screen bg-[#FAF7F2] flex font-sans overflow-hidden">
+        <div className="h-screen bg-[#FAF7F2] flex font-sans overflow-hidden">
             <AdminSidebar />
 
-            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto max-h-screen">
+            <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto">
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                     <div>
@@ -107,6 +172,21 @@ const ManageOrders = () => {
                         </div>
                     </div>
                 </header>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                    {stats.map((stat, index) => (
+                        <div key={index} className="bg-white p-6 rounded-2xl shadow-sm border border-[#E0D8CC] flex items-center hover:shadow-md transition-shadow">
+                            <div className={`${stat.color} p-4 rounded-xl text-white mr-5 shadow-inner`}>
+                                {stat.icon}
+                            </div>
+                            <div>
+                                <p className="text-[10px] text-[#A68A64] font-black uppercase tracking-widest">{stat.label}</p>
+                                <p className="text-2xl font-bold text-[#4A4036]">{stat.value}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
 
                 {error && (
                     <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700">
@@ -148,7 +228,7 @@ const ManageOrders = () => {
                             <tbody className="divide-y divide-[#E0D8CC]">
                                 {filteredOrders.length > 0 ? (
                                     filteredOrders.map((order) => {
-                                        const statusInfo = getStatusInfo(order);
+                                        const statusInfo = getDisplayStatusInfo(order);
                                         return (
                                             <tr key={order._id} className="hover:bg-[#FAF7F2] transition-colors group">
                                                 <td className="px-8 py-6">
