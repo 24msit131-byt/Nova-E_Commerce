@@ -16,6 +16,8 @@ const Checkout = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayScriptLoaded, setRazorpayScriptLoaded] = useState(false);
     const [appliedPromo, setAppliedPromo] = useState(null);
+    const [savedAddresses, setSavedAddresses] = useState([]);
+    const [selectedAddressId, setSelectedAddressId] = useState('profile');
     const [shippingDetails, setShippingDetails] = useState({
         fullName: '',
         phoneNumber: '',
@@ -23,6 +25,7 @@ const Checkout = () => {
         pincode: '',
         taluka: '',
         district: '',
+        city: '',
         state: ''
     });
 
@@ -105,6 +108,27 @@ const Checkout = () => {
                         return;
                     }
 
+                    const addresses = Array.isArray(fullUserData.addresses) ? fullUserData.addresses : [];
+                    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+
+                    setSavedAddresses(addresses);
+
+                    if (defaultAddress) {
+                        setSelectedAddressId(String(defaultAddress._id || 'profile'));
+                        setShippingDetails((prev) => ({
+                            ...prev,
+                            fullName: fullUserData.fullName || '',
+                            phoneNumber: fullUserData.phoneNumber || '',
+                            addressLine: defaultAddress.addressLine || fullUserData.addressLine || '',
+                            pincode: defaultAddress.pincode || fullUserData.pincode || '',
+                            taluka: defaultAddress.taluka || fullUserData.taluka || '',
+                            district: defaultAddress.district || fullUserData.district || '',
+                            city: defaultAddress.city || fullUserData.city || '',
+                            state: defaultAddress.state || fullUserData.state || ''
+                        }));
+                        return;
+                    }
+
                     setShippingDetails((prev) => ({
                         ...prev,
                         fullName: fullUserData.fullName || '',
@@ -113,8 +137,10 @@ const Checkout = () => {
                         pincode: fullUserData.pincode || '',
                         taluka: fullUserData.taluka || '',
                         district: fullUserData.district || '',
+                        city: fullUserData.city || '',
                         state: fullUserData.state || ''
                     }));
+                    setSelectedAddressId('profile');
                 }
             } catch (error) {
                 console.error('Error fetching full user details:', error.response?.data || error.message);
@@ -134,25 +160,22 @@ const Checkout = () => {
     const handleShippingChange = (e) => {
         const { name, value } = e.target;
         setShippingDetails((prev) => ({ ...prev, [name]: value }));
+        setSelectedAddressId('profile');
     };
 
-    const updateUserProfile = async () => {
-        if (!user || user.role === 'admin') return;
+    const useSavedAddress = (address) => {
+        if (!address) return;
 
-        try {
-            await api.put('/user/profile', {
-                fullName: shippingDetails.fullName,
-                phoneNumber: shippingDetails.phoneNumber,
-                addressLine: shippingDetails.addressLine,
-                pincode: shippingDetails.pincode,
-                state: shippingDetails.state,
-                district: shippingDetails.district,
-                taluka: shippingDetails.taluka,
-                city: shippingDetails.city || shippingDetails.district
-            });
-        } catch (error) {
-            console.error('Failed to update user profile during checkout:', error);
-        }
+        setSelectedAddressId(String(address._id || 'profile'));
+        setShippingDetails((prev) => ({
+            ...prev,
+            addressLine: address.addressLine || '',
+            pincode: address.pincode || '',
+            state: address.state || '',
+            district: address.district || '',
+            taluka: address.taluka || '',
+            city: address.city || ''
+        }));
     };
 
     const buildOrderPayload = (selectedPaymentMethod) => ({
@@ -282,9 +305,6 @@ const Checkout = () => {
         setIsProcessing(true);
 
         try {
-            // Automatically update user profile with latest shipping details
-            await updateUserProfile();
-
             if (paymentMethod === 'razorpay') {
                 await startRazorpayCheckout();
                 return;
@@ -327,6 +347,67 @@ const Checkout = () => {
                             <h2 className="text-2xl font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>Shipping Logistics</h2>
                         </div>
 
+                        <div className="mb-10 rounded-[2.5rem] border p-6 md:p-8" style={{ borderColor: colors.accent, backgroundColor: 'white' }}>
+                            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Saved Addresses</p>
+                                    <h3 className="mt-2 text-xl font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>Choose a delivery address</h3>
+                                </div>
+                                <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: colors.textSecondary }}>
+                                    Manage the list in your profile.
+                                </p>
+                            </div>
+
+                            {savedAddresses.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {savedAddresses.map((address, index) => {
+                                        const isSelected = String(selectedAddressId) === String(address._id);
+
+                                        return (
+                                            <button
+                                                key={address._id}
+                                                type="button"
+                                                onClick={() => useSavedAddress(address)}
+                                                className={`text-left rounded-[1.75rem] border p-5 transition-all ${isSelected ? 'shadow-lg' : 'hover:shadow-md'}`}
+                                                style={{
+                                                    borderColor: isSelected ? colors.primary : colors.accent,
+                                                    backgroundColor: isSelected ? colors.pageBg : 'white'
+                                                }}
+                                            >
+                                                <div className="flex items-start justify-between gap-4 mb-4">
+                                                    <div>
+                                                        <p className="font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>
+                                                            {address.label || `Address ${index + 1}`}
+                                                        </p>
+                                                        {address.isDefault && (
+                                                            <span className="mt-2 inline-flex px-3 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest border border-green-100">
+                                                                Default
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {isSelected && (
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: colors.primary }}>
+                                                            Selected
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-1 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                                                    <p>{address.addressLine}</p>
+                                                    <p>{address.taluka}{address.taluka && address.district ? ', ' : ''}{address.district}</p>
+                                                    <p>{address.city}{address.city && address.state ? ', ' : ''}{address.state} - {address.pincode}</p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="rounded-[1.75rem] border border-dashed p-6 text-sm font-medium" style={{ borderColor: colors.accent, color: colors.textSecondary }}>
+                                    No saved addresses yet. Use the form below or add addresses from your profile.
+                                </div>
+                            )}
+                        </div>
+
                         <form className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Full Legal Name</label>
@@ -351,6 +432,10 @@ const Checkout = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>District</label>
                                 <input name="district" value={shippingDetails.district} onChange={handleShippingChange} type="text" className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent" style={{ borderColor: colors.accent, color: colors.textMain }} placeholder="Ahmedabad" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Town / City</label>
+                                <input name="city" value={shippingDetails.city} onChange={handleShippingChange} type="text" className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent" style={{ borderColor: colors.accent, color: colors.textMain }} placeholder="Ahmedabad" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>State</label>

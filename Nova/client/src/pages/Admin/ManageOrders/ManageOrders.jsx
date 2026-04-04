@@ -4,12 +4,48 @@ import { FaSearch, FaShippingFast, FaCheckCircle, FaFilter, FaArrowRight, FaCloc
 import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 
+const RETURN_FLOW_STATUSES = ['Completed'];
+const LEGACY_RETURN_STATUSES = ['Returned'];
+
+const getReturnStatus = (order) => {
+    const returnStatus = order?.returnRequest?.status;
+    if (returnStatus && returnStatus !== 'None') {
+        return returnStatus;
+    }
+
+    if (LEGACY_RETURN_STATUSES.includes(order?.status)) {
+        return order.status;
+    }
+
+    return null;
+};
+
+const isReturnOrder = (order) => {
+    const returnStatus = getReturnStatus(order);
+    return RETURN_FLOW_STATUSES.includes(returnStatus) || LEGACY_RETURN_STATUSES.includes(returnStatus);
+};
+
+const getFulfillmentStatus = (order) => {
+    return order?.status || 'Processing';
+};
+
+const isDeliveredOrder = (order) => {
+    return getFulfillmentStatus(order) === 'Delivered'
+    ;
+};
+
+const isPendingOrder = (order) => {
+    const fulfillmentStatus = getFulfillmentStatus(order);
+    return !['Delivered', 'Cancelled'].includes(fulfillmentStatus) && !isReturnOrder(order);
+};
+
 const ManageOrders = () => {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState("");
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeFilter, setActiveFilter] = useState('Total number of placed order');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportFilters, setReportFilters] = useState({
         category: 'All',
@@ -61,10 +97,48 @@ const ManageOrders = () => {
         }
     };
 
-    const filteredOrders = orders.filter(order =>
-        order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.user?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const handleFilterClick = (label) => {
+        setActiveFilter(prev => prev === label ? 'Total number of placed order' : label);
+    };
+
+    const getFilteredOrders = () => {
+        let filtered = orders;
+
+        if (activeFilter !== 'Total number of placed order') {
+            if (activeFilter === 'Total under pending order') {
+                filtered = filtered.filter(isPendingOrder);
+            } else if (activeFilter === 'Total number of return order') {
+                filtered = filtered.filter(isReturnOrder);
+            } else if (activeFilter === 'Total delivered order') {
+                filtered = filtered.filter(isDeliveredOrder);
+            } else {
+                const status = activeFilter
+                    .replace('Total ', '')
+                    .replace('number of ', '')
+                    .replace('Under ', '')
+                    .replace(' order', '')
+                    .replace('processing', 'Processing')
+                    .replace('shipped', 'Shipped')
+                    .replace('delivered', 'Delivered')
+                    .replace('cancel', 'Cancelled')
+                    .replace('packed', 'Packed')
+                    .trim();
+                
+                filtered = filtered.filter(o => o.status === status);
+            }
+        }
+
+        if (searchTerm) {
+            return filtered.filter(order =>
+                order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                order.user?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
+        return filtered;
+    };
+
+    const displayedOrders = getFilteredOrders();
 
     // Updated status styling to match the organic theme
     const getStatusInfo = (order) => {
@@ -144,13 +218,13 @@ const ManageOrders = () => {
 
     const stats = [
         { label: 'Total number of placed order', value: orders.length, icon: <FaBoxOpen />, color: 'bg-[#A68A64]' },
-        { label: 'Total under pending order', value: orders.filter(o => o.status === 'Pending').length, icon: <FaClock />, color: 'bg-[#4A4036]' },
-        { label: 'Under proccessing order', value: orders.filter(o => o.status === 'Processing').length, icon: <FaClock />, color: 'bg-[#A68A64]' },
+        { label: 'Total under pending order', value: orders.filter(isPendingOrder).length, icon: <FaClock />, color: 'bg-[#4A4036]' },
+        { label: 'Under processing order', value: orders.filter(o => o.status === 'Processing').length, icon: <FaClock />, color: 'bg-[#A68A64]' },
         { label: 'Total packed order', value: orders.filter(o => o.status === 'Packed').length, icon: <FaShippingFast />, color: 'bg-[#4A4036]' },
-        { label: 'Total shiped order', value: orders.filter(o => o.status === 'Shipped').length, icon: <FaShippingFast />, color: 'bg-[#A68A64]' },
-        { label: 'Total delevard order', value: orders.filter(o => o.status === 'Delivered').length, icon: <FaCheckCircle />, color: 'bg-[#4A4036]' },
+        { label: 'Total shipped order', value: orders.filter(o => o.status === 'Shipped').length, icon: <FaShippingFast />, color: 'bg-[#A68A64]' },
+        { label: 'Total delivered order', value: orders.filter(isDeliveredOrder).length, icon: <FaCheckCircle />, color: 'bg-[#4A4036]' },
         { label: 'Total number of cancel order', value: orders.filter(o => o.status === 'Cancelled').length, icon: <FaTimes />, color: 'bg-[#A68A64]' },
-        { label: 'Total number of return order', value: orders.filter(o => ['Return Request', 'Return Approved', 'Returned'].includes(o.status)).length, icon: <FaExchangeAlt />, color: 'bg-[#4A4036]' },
+        { label: 'Total number of return order', value: orders.filter(isReturnOrder).length, icon: <FaExchangeAlt />, color: 'bg-[#4A4036]' },
     ];
 
     return (
@@ -173,10 +247,21 @@ const ManageOrders = () => {
                     </div>
                 </header>
 
+                <div className="mb-8">
+                    <h2 className="text-lg font-bold text-[#4A4036] uppercase tracking-widest">
+                        {activeFilter.replace(/Total number of|Total|Under/gi, '').trim()}
+                    </h2>
+                </div>
+
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                     {stats.map((stat, index) => (
-                        <div key={index} className="bg-white p-6 rounded-2xl shadow-sm border border-[#E0D8CC] flex items-center hover:shadow-md transition-shadow">
+                        <div 
+                            key={index} 
+                            onClick={() => handleFilterClick(stat.label)}
+                            className={`bg-white p-6 rounded-2xl shadow-sm border-2 flex items-center cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-105 ${
+                                activeFilter === stat.label ? 'border-[#A68A64] scale-105' : 'border-transparent'
+                            }`}>
                             <div className={`${stat.color} p-4 rounded-xl text-white mr-5 shadow-inner`}>
                                 {stat.icon}
                             </div>
@@ -226,8 +311,8 @@ const ManageOrders = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#E0D8CC]">
-                                {filteredOrders.length > 0 ? (
-                                    filteredOrders.map((order) => {
+                                {displayedOrders.length > 0 ? (
+                                    displayedOrders.map((order) => {
                                         const statusInfo = getDisplayStatusInfo(order);
                                         return (
                                             <tr key={order._id} className="hover:bg-[#FAF7F2] transition-colors group">
@@ -282,7 +367,7 @@ const ManageOrders = () => {
                     {/* Footer / Summary Info */}
                     <div className="p-8 border-t border-[#E0D8CC] bg-[#F5F5F5]/50 flex justify-between items-center">
                         <p className="text-[11px] font-bold text-[#A68A64] uppercase tracking-widest">
-                            Showing {filteredOrders.length} of {orders.length} transactions
+                            Showing {displayedOrders.length} of {orders.length} transactions
                         </p>
                         <div className="flex space-x-4">
                             <button

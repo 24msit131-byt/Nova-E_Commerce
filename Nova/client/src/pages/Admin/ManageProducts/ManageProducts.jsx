@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaSearch, FaEdit, FaTrash, FaFilter, FaBoxOpen } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEdit, FaTrash, FaFilter, FaBoxOpen, FaDownload } from 'react-icons/fa';
 import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 import { toast } from 'react-toastify';
@@ -11,6 +11,7 @@ const ManageProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(false);
 
   const fetchProducts = async () => {
     try {
@@ -37,6 +38,39 @@ const ManageProducts = () => {
       } catch (err) {
         toast.error(err.response?.data?.message || err.message);
       }
+    }
+  };
+
+  const handleDownloadInvoice = async () => {
+    try {
+      setDownloading(true);
+
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+
+      const response = await api.get(`/reports/inventory${params.toString() ? `?${params.toString()}` : ''}`, {
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Product_invoice.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Invoice downloaded successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download invoice. Please try again.');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -150,10 +184,16 @@ const ManageProducts = () => {
           
           {/* Pagination */}
           <div className="p-8 border-t border-[#E0D8CC] flex justify-between items-center bg-[#F5F5F5]/30">
-            <span className="text-[10px] font-black text-[#A68A64] uppercase tracking-widest">Inventory Segment 1 / 1</span>
+            <span className="text-[10px] font-black text-[#A68A64] uppercase tracking-widest">Inventory Segment</span>
             <div className="flex space-x-3">
-              <button className="px-5 py-2 bg-white border border-[#E0D8CC] rounded-lg text-[10px] font-black uppercase text-[#A68A64] hover:bg-[#FAF7F2] transition-colors">Prev</button>
-              <button className="px-5 py-2 bg-[#4A4036] text-white rounded-lg text-[10px] font-black uppercase hover:bg-[#A68A64] shadow-md transition-colors">Next</button>
+              <button
+                onClick={handleDownloadInvoice}
+                disabled={downloading}
+                className="px-5 py-2 bg-[#4A4036] text-white rounded-lg text-[10px] font-black uppercase hover:bg-[#A68A64] shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <FaDownload size={10} />
+                <span>{downloading ? 'Downloading...' : 'Download Invoice'}</span>
+              </button>
             </div>
           </div>
         </div>

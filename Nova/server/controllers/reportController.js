@@ -15,6 +15,200 @@ const formatDate = (value) => {
     });
 };
 
+const TREND_PERIODS = new Set(['weekly', 'monthly', 'yearly']);
+const REVENUE_OVERVIEW_PERIODS = new Set(['weekly', 'monthly', 'yearly']);
+
+const padTwoDigits = (value) => String(value).padStart(2, '0');
+
+const buildMonthlyRevenueOverview = (year) => {
+    const buckets = Array.from({ length: 12 }, (_, index) => {
+        const currentDate = new Date(year, index, 1);
+
+        return {
+            key: `${year}-${padTwoDigits(index + 1)}`,
+            label: currentDate.toLocaleDateString('en-IN', { month: 'short' })
+        };
+    });
+
+    return {
+        year,
+        buckets,
+        startDate: new Date(year, 0, 1),
+        endDate: new Date(year, 11, 31, 23, 59, 59, 999),
+        groupBy: 'month'
+    };
+};
+
+const buildDailyRevenueOverview = (endDate, dayCount) => {
+    const rangeEnd = new Date(endDate);
+    rangeEnd.setHours(23, 59, 59, 999);
+
+    const startDate = new Date(rangeEnd);
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - (dayCount - 1));
+
+    const buckets = Array.from({ length: dayCount }, (_, index) => {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + index);
+
+        return {
+            key: `${currentDate.getFullYear()}-${padTwoDigits(currentDate.getMonth() + 1)}-${padTwoDigits(currentDate.getDate())}`,
+            label: currentDate.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short'
+            })
+        };
+    });
+
+    return {
+        startDate,
+        endDate: rangeEnd,
+        buckets,
+        groupBy: 'day'
+    };
+};
+
+const buildRevenueOverviewConfig = (period) => {
+    const normalizedPeriod = REVENUE_OVERVIEW_PERIODS.has(period) ? period : 'yearly';
+
+    if (normalizedPeriod === 'yearly') {
+        const currentYear = new Date().getFullYear();
+
+        return {
+            period: normalizedPeriod,
+            currentLabel: String(currentYear),
+            previousLabel: String(currentYear - 1),
+            subtitle: 'Monthly revenue compared to previous year',
+            currentRange: buildMonthlyRevenueOverview(currentYear),
+            previousRange: buildMonthlyRevenueOverview(currentYear - 1),
+        };
+    }
+
+    const dayCount = normalizedPeriod === 'monthly' ? 30 : 7;
+    const currentRange = buildDailyRevenueOverview(new Date(), dayCount);
+    const previousRange = buildDailyRevenueOverview(new Date(currentRange.startDate.getTime() - 1), dayCount);
+
+    return {
+        period: normalizedPeriod,
+        currentLabel: normalizedPeriod === 'monthly' ? 'Last 30 days' : 'Last 7 days',
+        previousLabel: normalizedPeriod === 'monthly' ? 'Previous 30 days' : 'Previous 7 days',
+        subtitle: normalizedPeriod === 'monthly'
+            ? 'Daily revenue compared to previous 30 days'
+            : 'Daily revenue compared to previous 7 days',
+        currentRange,
+        previousRange,
+    };
+};
+
+const aggregateRevenueSeries = async (range) => {
+    const groupStage = range.groupBy === 'month'
+        ? {
+            _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' }
+            },
+            revenue: { $sum: '$totalPrice' }
+        }
+        : {
+            _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' },
+                day: { $dayOfMonth: '$createdAt' }
+            },
+            revenue: { $sum: '$totalPrice' }
+        };
+
+    const groupedOrders = await Order.aggregate([
+        {
+            $match: {
+                createdAt: {
+                    $gte: range.startDate,
+                    $lte: range.endDate
+                },
+                $or: [
+                    { isPaid: true },
+                    { paymentMethod: { $regex: /^cod$/i }, isDelivered: true }
+                ]
+            }
+        },
+        {
+            $group: groupStage
+        }
+    ]);
+
+    const revenueMap = new Map(
+        groupedOrders.map((entry) => {
+            const { year, month, day } = entry._id;
+            const key = range.groupBy === 'month'
+                ? `${year}-${padTwoDigits(month)}`
+                : `${year}-${padTwoDigits(month)}-${padTwoDigits(day)}`;
+
+            return [key, entry.revenue || 0];
+        })
+    );
+
+    const series = range.buckets.map((bucket) => ({
+        label: bucket.label,
+        value: revenueMap.get(bucket.key) || 0
+    }));
+
+    const totalRevenue = series.reduce((sum, item) => sum + item.value, 0);
+
+    return { series, totalRevenue };
+};
+
+const buildOrderTrendBuckets = (period) => {
+    const normalizedPeriod = TREND_PERIODS.has(period) ? period : 'weekly';
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    if (normalizedPeriod === 'yearly') {
+        const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 11, 1);
+        const buckets = Array.from({ length: 12 }, (_, index) => {
+            const currentDate = new Date(startDate.getFullYear(), startDate.getMonth() + index, 1);
+            return {
+                key: `${currentDate.getFullYear()}-${padTwoDigits(currentDate.getMonth() + 1)}`,
+                label: currentDate.toLocaleDateString('en-IN', {
+                    month: 'short',
+                    year: 'numeric'
+                })
+            };
+        });
+
+        return {
+            startDate,
+            endDate,
+            buckets,
+            groupBy: 'month'
+        };
+    }
+
+    const dayCount = normalizedPeriod === 'monthly' ? 30 : 7;
+    const startDate = new Date(endDate);
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - (dayCount - 1));
+
+    const buckets = Array.from({ length: dayCount }, (_, index) => {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + index);
+
+        return {
+            key: `${currentDate.getFullYear()}-${padTwoDigits(currentDate.getMonth() + 1)}-${padTwoDigits(currentDate.getDate())}`,
+            label: currentDate.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short'
+            })
+        };
+    });
+
+    return {
+        startDate,
+        endDate,
+        buckets,
+        groupBy: 'day'
+    };
+};
+
 // @desc    Get dashboard stats
 // @route   GET /api/v1/reports/stats
 // @access  Private/Admin
@@ -73,6 +267,196 @@ export const getRecentOrders = async (req, res) => {
         });
     }
 };
+
+// @desc    Get order trend data for dashboard charts
+// @route   GET /api/v1/reports/order-trends
+// @access  Private/Admin
+export const getOrderTrendReport = async (req, res) => {
+    try {
+        const requestedPeriod = String(req.query.period || 'weekly').toLowerCase();
+        const period = TREND_PERIODS.has(requestedPeriod) ? requestedPeriod : 'weekly';
+        const { startDate, endDate, buckets, groupBy } = buildOrderTrendBuckets(period);
+
+        const groupStage = groupBy === 'month'
+            ? {
+                _id: {
+                    year: { $year: '$createdAt' },
+                    month: { $month: '$createdAt' }
+                },
+                count: { $sum: 1 }
+            }
+            : {
+                _id: {
+                    year: { $year: '$createdAt' },
+                    month: { $month: '$createdAt' },
+                    day: { $dayOfMonth: '$createdAt' }
+                },
+                count: { $sum: 1 }
+            };
+
+        const groupedOrders = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: startDate,
+                        $lte: endDate
+                    }
+                }
+            },
+            {
+                $group: groupStage
+            }
+        ]);
+
+        const countMap = new Map(
+            groupedOrders.map((entry) => {
+                const { year, month, day } = entry._id;
+                const key = groupBy === 'month'
+                    ? `${year}-${padTwoDigits(month)}`
+                    : `${year}-${padTwoDigits(month)}-${padTwoDigits(day)}`;
+
+                return [key, entry.count];
+            })
+        );
+
+        const series = buckets.map((bucket) => ({
+            label: bucket.label,
+            value: countMap.get(bucket.key) || 0
+        }));
+
+        const totalOrders = series.reduce((sum, item) => sum + item.value, 0);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                period,
+                totalOrders,
+                series
+            }
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Get revenue trend data for dashboard charts
+// @route   GET /api/v1/reports/revenue-trends
+// @access  Private/Admin
+export const getRevenueTrendReport = async (req, res) => {
+    try {
+        const requestedPeriod = String(req.query.period || 'weekly').toLowerCase();
+        const period = TREND_PERIODS.has(requestedPeriod) ? requestedPeriod : 'weekly';
+        const { startDate, endDate, buckets, groupBy } = buildOrderTrendBuckets(period);
+
+        const revenueMatch = {
+            createdAt: {
+                $gte: startDate,
+                $lte: endDate
+            },
+            $or: [
+                { isPaid: true },
+                { paymentMethod: { $regex: /^cod$/i }, isDelivered: true }
+            ]
+        };
+
+        const groupStage = groupBy === 'month'
+            ? {
+                _id: {
+                    year: { $year: '$createdAt' },
+                    month: { $month: '$createdAt' }
+                },
+                revenue: { $sum: '$totalPrice' }
+            }
+            : {
+                _id: {
+                    year: { $year: '$createdAt' },
+                    month: { $month: '$createdAt' },
+                    day: { $dayOfMonth: '$createdAt' }
+                },
+                revenue: { $sum: '$totalPrice' }
+            };
+
+        const groupedOrders = await Order.aggregate([
+            {
+                $match: revenueMatch
+            },
+            {
+                $group: groupStage
+            }
+        ]);
+
+        const revenueMap = new Map(
+            groupedOrders.map((entry) => {
+                const { year, month, day } = entry._id;
+                const key = groupBy === 'month'
+                    ? `${year}-${padTwoDigits(month)}`
+                    : `${year}-${padTwoDigits(month)}-${padTwoDigits(day)}`;
+
+                return [key, entry.revenue || 0];
+            })
+        );
+
+        const series = buckets.map((bucket) => ({
+            label: bucket.label,
+            value: revenueMap.get(bucket.key) || 0
+        }));
+
+        const totalRevenue = series.reduce((sum, item) => sum + item.value, 0);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                period,
+                totalRevenue,
+                series
+            }
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Get revenue overview comparison chart
+// @route   GET /api/v1/reports/revenue-overview
+// @access  Private/Admin
+export const getRevenueOverviewReport = async (req, res) => {
+    try {
+        const requestedPeriod = String(req.query.period || 'yearly').toLowerCase();
+        const config = buildRevenueOverviewConfig(requestedPeriod);
+
+        const currentRevenueSeries = await aggregateRevenueSeries(config.currentRange);
+        const comparisonRevenueSeries = await aggregateRevenueSeries(config.previousRange);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                period: config.period,
+                currentLabel: config.currentLabel,
+                previousLabel: config.previousLabel,
+                subtitle: config.subtitle,
+                labels: config.currentRange.buckets.map((bucket) => bucket.label),
+                currentSeries: currentRevenueSeries.series,
+                comparisonSeries: comparisonRevenueSeries.series,
+                totals: {
+                    currentRevenue: currentRevenueSeries.totalRevenue,
+                    previousRevenue: comparisonRevenueSeries.totalRevenue
+                }
+            }
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 // @desc    Get inventory report (CSV)
 // @route   GET /api/v1/reports/inventory
 // @access  Private/Admin

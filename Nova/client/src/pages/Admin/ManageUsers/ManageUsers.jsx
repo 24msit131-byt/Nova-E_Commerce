@@ -336,18 +336,20 @@ const ManageUsers = () => {
                                         <td className="px-8 py-6">
                                             <div className="flex items-center space-x-3">
                                                 <button
-                                                    className="p-2 text-[#E0D8CC] hover:text-[#A68A64] transition-colors disabled:opacity-40"
+                                                /* if user role is admin so at that time delete button is disabled*/
+                                                    className="p-2 text-[#E0D8CC] hover:text-[#A68A64] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                                     title="Modify Role"
-                                                    disabled={actionLoadingId === user.id}
+                                                    disabled={actionLoadingId === user.id || user.role === 'Admin'}
                                                     onClick={() => toggleRole(user)}
                                                 >
                                                     <FaShieldAlt size={14} />
                                                 </button>
                                                 <button
-                                                    className="p-2 text-[#E0D8CC] hover:text-red-600 transition-colors disabled:opacity-40"
+                                                    className="p-2 text-[#E0D8CC] hover:text-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                                     title="Remove Account"
-                                                    disabled={actionLoadingId === user.id}
+                                                    disabled={actionLoadingId === user.id || user.role === 'Admin'}
                                                     onClick={() => deleteUser(user.id)}
+
                                                 >
                                                     <FaTrashAlt size={14} />
                                                 </button>

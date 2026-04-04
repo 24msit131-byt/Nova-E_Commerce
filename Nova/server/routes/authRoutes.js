@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { registerUser, loginUser, googleLogin, forgotPassword, resetPassword } from '../controllers/authController.js';
-import { deleteUserByAdmin, getAdminUsers, getMe, updateProfile, updateUserRole } from '../controllers/userController.js';
+import { addAddress, deleteAddress, deleteUserByAdmin, getAdminUsers, getMe, updateAddress, updateProfile, updateUserRole } from '../controllers/userController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { requireAdmin } from '../middlewares/roleMiddleware.js';
 
@@ -25,6 +25,9 @@ router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/reset-password/:token', resetPassword);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
+router.post('/addresses', protect, addAddress);
+router.patch('/addresses/:addressId', protect, updateAddress);
+router.delete('/addresses/:addressId', protect, deleteAddress);
 router.get('/admin/users', protect, requireAdmin, getAdminUsers);
 router.patch('/admin/users/:userId/role', protect, requireAdmin, updateUserRole);
 router.delete('/admin/users/:userId', protect, requireAdmin, deleteUserByAdmin);

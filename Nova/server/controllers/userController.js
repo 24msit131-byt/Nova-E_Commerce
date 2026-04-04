@@ -1,6 +1,90 @@
 import User from '../models/User.js';
 import Admin from '../models/Admin.js';
 
+const ADDRESS_LIMIT = 4;
+
+const normalizeText = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const buildAddressPayload = (body = {}) => ({
+    label: normalizeText(body.label) || 'Home',
+    addressLine: normalizeText(body.addressLine),
+    pincode: normalizeText(body.pincode),
+    state: normalizeText(body.state),
+    district: normalizeText(body.district),
+    taluka: normalizeText(body.taluka),
+    city: normalizeText(body.city),
+    isDefault: body.isDefault === true || body.isDefault === 'true',
+});
+
+const validateAddressPayload = (address) => {
+    const requiredFields = ['addressLine', 'pincode', 'state', 'district', 'taluka', 'city'];
+    return requiredFields.filter((field) => !address[field]);
+};
+
+const syncProfileFieldsFromDefaultAddress = (user) => {
+    const addresses = Array.isArray(user.addresses) ? user.addresses : [];
+
+    if (!addresses.length) {
+        return;
+    }
+
+    const primaryAddress = addresses.find((address) => address.isDefault) || addresses[0];
+
+    user.addressLine = primaryAddress?.addressLine || '';
+    user.pincode = primaryAddress?.pincode || '';
+    user.state = primaryAddress?.state || '';
+    user.district = primaryAddress?.district || '';
+    user.taluka = primaryAddress?.taluka || '';
+    user.city = primaryAddress?.city || '';
+};
+
+const syncDefaultAddressFromProfileFields = (user) => {
+    const addresses = Array.isArray(user.addresses) ? user.addresses : [];
+
+    if (!addresses.length) {
+        return;
+    }
+
+    const primaryAddress = addresses.find((address) => address.isDefault) || addresses[0];
+
+    if (!primaryAddress) {
+        return;
+    }
+
+    primaryAddress.addressLine = user.addressLine || '';
+    primaryAddress.pincode = user.pincode || '';
+    primaryAddress.state = user.state || '';
+    primaryAddress.district = user.district || '';
+    primaryAddress.taluka = user.taluka || '';
+    primaryAddress.city = user.city || '';
+};
+
+const ensureDefaultAddress = (addresses, preferredAddressId = null) => {
+    if (!addresses.length) {
+        return;
+    }
+
+    if (preferredAddressId) {
+        addresses.forEach((address) => {
+            address.isDefault = String(address._id) === String(preferredAddressId);
+        });
+        return;
+    }
+
+    const currentDefaultIndex = addresses.findIndex((address) => address.isDefault);
+
+    if (currentDefaultIndex >= 0) {
+        addresses.forEach((address, index) => {
+            address.isDefault = index === currentDefaultIndex;
+        });
+        return;
+    }
+
+    addresses.forEach((address, index) => {
+        address.isDefault = index === 0;
+    });
+};
+
 const pickProfileFields = (body) => ({
     fullName: body.fullName,
     phoneNumber: body.phoneNumber,
@@ -53,10 +137,189 @@ export const updateProfile = async (req, res) => {
         }
 
         user.set(updates);
+
+        if (Array.isArray(user.addresses) && user.addresses.length > 0) {
+            syncDefaultAddressFromProfileFields(user);
+        }
+
         await user.save();
 
         res.status(200).json({
             status: 'success',
+            data: {
+                user,
+            },
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: err.message,
+        });
+    }
+};
+
+export const addAddress = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found.',
+            });
+        }
+
+        if ((user.addresses || []).length >= ADDRESS_LIMIT) {
+            return res.status(400).json({
+                status: 'fail',
+                message: `You can save up to ${ADDRESS_LIMIT} addresses.`,
+            });
+        }
+
+        const address = buildAddressPayload(req.body);
+        const missingFields = validateAddressPayload(address);
+
+        if (missingFields.length) {
+            return res.status(400).json({
+                status: 'fail',
+                message: `Please complete the address fields: ${missingFields.join(', ')}.`,
+            });
+        }
+
+        const shouldBeDefault = address.isDefault || (user.addresses || []).length === 0 || !(user.addresses || []).some((item) => item.isDefault);
+
+        if (shouldBeDefault) {
+            (user.addresses || []).forEach((item) => {
+                item.isDefault = false;
+            });
+        }
+
+        user.addresses.push({
+            ...address,
+            isDefault: shouldBeDefault,
+        });
+
+        ensureDefaultAddress(user.addresses);
+        syncProfileFieldsFromDefaultAddress(user);
+        await user.save();
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Address added successfully.',
+            data: {
+                user,
+            },
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: err.message,
+        });
+    }
+};
+
+export const updateAddress = async (req, res) => {
+    try {
+        const { addressId } = req.params;
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found.',
+            });
+        }
+
+        const address = user.addresses.id(addressId);
+
+        if (!address) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'Address not found.',
+            });
+        }
+
+        const payload = buildAddressPayload(req.body);
+        const missingFields = validateAddressPayload(payload);
+
+        if (missingFields.length) {
+            return res.status(400).json({
+                status: 'fail',
+                message: `Please complete the address fields: ${missingFields.join(', ')}.`,
+            });
+        }
+
+        const nextIsDefault = req.body.isDefault === undefined ? address.isDefault : payload.isDefault;
+
+        address.set({
+            ...payload,
+            isDefault: nextIsDefault,
+        });
+
+        if (nextIsDefault) {
+            ensureDefaultAddress(user.addresses, address._id);
+        } else {
+            ensureDefaultAddress(user.addresses);
+        }
+
+        syncProfileFieldsFromDefaultAddress(user);
+        await user.save();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Address updated successfully.',
+            data: {
+                user,
+            },
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: 'fail',
+            message: err.message,
+        });
+    }
+};
+
+export const deleteAddress = async (req, res) => {
+    try {
+        const { addressId } = req.params;
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found.',
+            });
+        }
+
+        const address = user.addresses.id(addressId);
+
+        if (!address) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'Address not found.',
+            });
+        }
+
+        const wasDefault = address.isDefault;
+        address.deleteOne();
+
+        if (user.addresses.length > 0) {
+            if (wasDefault) {
+                user.addresses.forEach((item, index) => {
+                    item.isDefault = index === 0;
+                });
+            }
+
+            ensureDefaultAddress(user.addresses);
+            syncProfileFieldsFromDefaultAddress(user);
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Address deleted successfully.',
             data: {
                 user,
             },

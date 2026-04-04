@@ -1,6 +1,53 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const addressSchema = new mongoose.Schema(
+    {
+        label: {
+            type: String,
+            trim: true,
+            default: 'Home',
+        },
+        addressLine: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        pincode: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        state: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        district: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        taluka: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        city: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        isDefault: {
+            type: Boolean,
+            default: false,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
 const userSchema = new mongoose.Schema({
     fullName: {
         type: String,
@@ -54,6 +101,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: '',
+    },
+    addresses: {
+        type: [addressSchema],
+        default: [],
     },
     addressLine: {
         type: String,

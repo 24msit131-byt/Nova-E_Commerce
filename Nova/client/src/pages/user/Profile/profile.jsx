@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaBox, FaExchangeAlt, FaMapMarkedAlt, FaShieldAlt, FaStar, FaTimes, FaCheckCircle } from 'react-icons/fa';
+import { FaBox, FaCheckCircle, FaEdit, FaExchangeAlt, FaMapMarkedAlt, FaPlus, FaShieldAlt, FaStar, FaTimes, FaTrash } from 'react-icons/fa';
 import api from '../../../services/api';
 import Footer from '../../../components/Footer';
 
@@ -85,12 +85,30 @@ const getReturnRequestState = (order) => {
   }
 };
 
+const EMPTY_ADDRESS_FORM = {
+  label: 'Home',
+  addressLine: '',
+  pincode: '',
+  state: '',
+  district: '',
+  taluka: '',
+  city: '',
+  isDefault: false,
+};
+
+const ADDRESS_LIMIT = 4;
+
 const Profile = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [isLoading, setIsLoading] = useState(true);
   const [saveState, setSaveState] = useState({ status: 'idle', message: '' });
+  const [addressState, setAddressState] = useState({ status: 'idle', message: '' });
   const [orders, setOrders] = useState([]);
   const [orderState, setOrderState] = useState({ status: 'idle', message: '' });
+  const [addresses, setAddresses] = useState([]);
+  const [addressMode, setAddressMode] = useState('idle');
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addressForm, setAddressForm] = useState({ ...EMPTY_ADDRESS_FORM });
   const [returnModal, setReturnModal] = useState({
     isOpen: false,
     orderId: null,
@@ -135,23 +153,89 @@ const Profile = () => {
     city: ''
   });
 
+  const applyUserSnapshot = (user) => {
+    if (!user) return;
+
+    setUserDetails({
+      fullName: user.fullName || '',
+      email: user.email || '',
+      phoneNumber: user.phoneNumber || '',
+      addressLine: user.addressLine || '',
+      pincode: user.pincode || '',
+      state: user.state || '',
+      district: user.district || '',
+      taluka: user.taluka || '',
+      city: user.city || ''
+    });
+
+    setAddresses(Array.isArray(user.addresses) ? user.addresses : []);
+  };
+
+  const resetAddressForm = () => {
+    setAddressForm({ ...EMPTY_ADDRESS_FORM });
+    setEditingAddressId(null);
+    setAddressMode('idle');
+  };
+
+  const startCreateAddress = () => {
+    if (addresses.length >= ADDRESS_LIMIT) {
+      setAddressState({
+        status: 'error',
+        message: `You can save up to ${ADDRESS_LIMIT} addresses.`
+      });
+      return;
+    }
+
+    setAddressState({ status: 'idle', message: '' });
+    setAddressForm({ ...EMPTY_ADDRESS_FORM });
+    setEditingAddressId(null);
+    setAddressMode('create');
+  };
+
+  const startEditAddress = (address) => {
+    if (!address?._id) return;
+
+    setAddressState({ status: 'idle', message: '' });
+    setAddressForm({
+      label: address.label || 'Home',
+      addressLine: address.addressLine || '',
+      pincode: address.pincode || '',
+      state: address.state || '',
+      district: address.district || '',
+      taluka: address.taluka || '',
+      city: address.city || '',
+      isDefault: Boolean(address.isDefault),
+    });
+    setEditingAddressId(address._id);
+    setAddressMode('edit');
+  };
+
+  const handleAddressInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setAddressForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+  const profileAddressPreview = defaultAddress || (userDetails.addressLine ? {
+    label: 'Profile Address',
+    addressLine: userDetails.addressLine,
+    pincode: userDetails.pincode,
+    state: userDetails.state,
+    district: userDetails.district,
+    taluka: userDetails.taluka,
+    city: userDetails.city,
+    isDefault: true,
+  } : null);
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const response = await api.get('/user/me');
         if (response.data?.data?.user) {
-          const user = response.data.data.user;
-          setUserDetails({
-            fullName: user.fullName || '',
-            email: user.email || '',
-            phoneNumber: user.phoneNumber || '',
-            addressLine: user.addressLine || '',
-            pincode: user.pincode || '',
-            state: user.state || '',
-            district: user.district || '',
-            taluka: user.taluka || '',
-            city: user.city || ''
-          });
+          applyUserSnapshot(response.data.data.user);
         }
       } catch (error) {
         console.error('Profile load error:', error.response?.data || error.message);
@@ -209,17 +293,7 @@ const Profile = () => {
 
       const user = response.data?.data?.user;
       if (user) {
-        setUserDetails({
-          fullName: user.fullName || '',
-          email: user.email || '',
-          phoneNumber: user.phoneNumber || '',
-          addressLine: user.addressLine || '',
-          pincode: user.pincode || '',
-          state: user.state || '',
-          district: user.district || '',
-          taluka: user.taluka || '',
-          city: user.city || ''
-        });
+        applyUserSnapshot(user);
       }
 
       setSaveState({ status: 'success', message: 'Profile updated successfully.' });
@@ -228,6 +302,109 @@ const Profile = () => {
       setSaveState({
         status: 'error',
         message: error.response?.data?.message || 'Failed to update profile.'
+      });
+    }
+  };
+
+  const handleAddressSubmit = async (e) => {
+    e.preventDefault();
+
+    if (addressMode === 'idle') {
+      return;
+    }
+
+    if (addressMode === 'create' && addresses.length >= ADDRESS_LIMIT) {
+      setAddressState({
+        status: 'error',
+        message: `You can save up to ${ADDRESS_LIMIT} addresses.`
+      });
+      return;
+    }
+
+    setAddressState({ status: 'loading', message: '' });
+
+    try {
+      const endpoint = editingAddressId ? `/user/addresses/${editingAddressId}` : '/user/addresses';
+      const method = editingAddressId ? 'patch' : 'post';
+      const response = await api[method](endpoint, addressForm);
+      const user = response.data?.data?.user;
+
+      if (user) {
+        applyUserSnapshot(user);
+      }
+
+      setAddressState({
+        status: 'success',
+        message: editingAddressId ? 'Address updated successfully.' : 'Address added successfully.'
+      });
+      resetAddressForm();
+    } catch (error) {
+      console.error('Address save error:', error.response?.data || error.message);
+      setAddressState({
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to save address.'
+      });
+    }
+  };
+
+  const handleDeleteAddress = async (addressId) => {
+    if (!addressId) return;
+
+    const confirmed = window.confirm('Delete this saved address?');
+    if (!confirmed) return;
+
+    setAddressState({ status: 'loading', message: '' });
+
+    try {
+      const response = await api.delete(`/user/addresses/${addressId}`);
+      const user = response.data?.data?.user;
+
+      if (user) {
+        applyUserSnapshot(user);
+      }
+
+      if (editingAddressId === addressId) {
+        resetAddressForm();
+      }
+
+      setAddressState({ status: 'success', message: 'Address deleted successfully.' });
+    } catch (error) {
+      console.error('Address delete error:', error.response?.data || error.message);
+      setAddressState({
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to delete address.'
+      });
+    }
+  };
+
+  const handleSetDefaultAddress = async (address) => {
+    if (!address?._id) return;
+
+    setAddressState({ status: 'loading', message: '' });
+
+    try {
+      const response = await api.patch(`/user/addresses/${address._id}`, {
+        label: address.label || 'Home',
+        addressLine: address.addressLine || '',
+        pincode: address.pincode || '',
+        state: address.state || '',
+        district: address.district || '',
+        taluka: address.taluka || '',
+        city: address.city || '',
+        isDefault: true,
+      });
+
+      const user = response.data?.data?.user;
+      if (user) {
+        applyUserSnapshot(user);
+      }
+
+      setAddressState({ status: 'success', message: 'Default address updated.' });
+    } catch (error) {
+      console.error('Default address update error:', error.response?.data || error.message);
+      setAddressState({
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to update default address.'
       });
     }
   };
@@ -391,9 +568,9 @@ const Profile = () => {
           <main className="flex-1">
             <div className="bg-white rounded-[10px] shadow-2xl border p-3 md:p-12" style={{ borderColor: colors.accent }}>
 
-              {activeTab === 'profile' || activeTab === 'address' ? (
+              {activeTab === 'profile' ? (
                 <div className="animate-in fade-in duration-700">
-                  <h2 className="text-2xl font-black uppercase tracking-tighter mb-10 pb-4 border-b" style={{ color: colors.textMain, borderColor: 'rgba(214, 201, 181, 0.3)' }}>Edit Profile & Address</h2>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter mb-10 pb-4 border-b" style={{ color: colors.textMain, borderColor: 'rgba(214, 201, 181, 0.3)' }}>Edit Profile</h2>
 
                   <form className="space-y-10" onSubmit={handleSubmit}>
                     {saveState.status !== 'idle' && (
@@ -452,110 +629,6 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {/* Address Section */}
-                    <div className="pt-10 border-t" style={{ borderColor: 'rgba(214, 201, 181, 0.3)' }}>
-                      <h3 className="text-xl font-black uppercase tracking-tighter mb-10 flex items-center" style={{ color: colors.textMain }}>
-                        <FaMapMarkedAlt className="mr-4" style={{ color: colors.primary }} /> Shipping Details
-                      </h3>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-12">
-                        <div className="md:col-span-2 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Street Address / Landmark</label>
-                          <input
-                            name="addressLine"
-                            type="text"
-                            value={userDetails.addressLine}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            placeholder="Flat, House no., Landmark"
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                            onFocus={(e) => e.target.style.borderColor = colors.primary}
-                            onBlur={(e) => e.target.style.borderColor = colors.accent}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Pincode</label>
-                          <input
-                            name="pincode"
-                            type="text"
-                            maxLength="6"
-                            value={userDetails.pincode}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            placeholder="380054"
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                            onFocus={(e) => e.target.style.borderColor = colors.primary}
-                            onBlur={(e) => e.target.style.borderColor = colors.accent}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Taluka</label>
-                          <input
-                            name="taluka"
-                            type="text"
-                            value={userDetails.taluka}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                            onFocus={(e) => e.target.style.borderColor = colors.primary}
-                            onBlur={(e) => e.target.style.borderColor = colors.accent}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>District</label>
-                          <input
-                            name="district"
-                            type="text"
-                            value={userDetails.district}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                            onFocus={(e) => e.target.style.borderColor = colors.primary}
-                            onBlur={(e) => e.target.style.borderColor = colors.accent}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Town/City</label>
-                          <input
-                            name="city"
-                            type="text"
-                            value={userDetails.city}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                            onFocus={(e) => e.target.style.borderColor = colors.primary}
-                            onBlur={(e) => e.target.style.borderColor = colors.accent}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>State</label>
-                          <select
-                            name="state"
-                            value={userDetails.state}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            className="w-full py-4 border-b-2 outline-none text-base font-bold bg-transparent cursor-pointer disabled:opacity-50"
-                            style={{ borderColor: colors.accent, color: colors.textMain }}
-                          >
-                            <option value="">Select State</option>
-                            <option value="Gujarat">Gujarat</option>
-                            <option value="Maharashtra">Maharashtra</option>
-                            <option value="Rajasthan">Rajasthan</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* save button */}
                     <div className="pt-10">
                       <button
@@ -571,6 +644,305 @@ const Profile = () => {
                       </button>
                     </div>
                   </form>
+
+                  <div className="mt-10 rounded-[2rem] border p-6 md:p-8 bg-[#FCFAF5]" style={{ borderColor: colors.accent }}>
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+                      <div>
+                        <h3 className="text-lg font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>Default Shipping Address</h3>
+                        <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: colors.textSecondary }}>
+                          This is the address used as the default selection at checkout.
+                        </p>
+                      </div>
+                      {profileAddressPreview?.label && (
+                        <span className="inline-flex px-3 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest border border-green-100">
+                          {profileAddressPreview.label}
+                        </span>
+                      )}
+                    </div>
+
+                    {profileAddressPreview ? (
+                      <div className="space-y-1 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                        <p>{profileAddressPreview.addressLine}</p>
+                        <p>{profileAddressPreview.taluka}{profileAddressPreview.taluka && profileAddressPreview.district ? ', ' : ''}{profileAddressPreview.district}</p>
+                        <p>{profileAddressPreview.city}{profileAddressPreview.city && profileAddressPreview.state ? ', ' : ''}{profileAddressPreview.state} - {profileAddressPreview.pincode}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium" style={{ color: colors.textSecondary }}>
+                        No default address is set yet. Add one from Your Addresses.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : activeTab === 'address' ? (
+                <div className="animate-in fade-in duration-700 space-y-8">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 pb-6 border-b" style={{ borderColor: 'rgba(214, 201, 181, 0.3)' }}>
+                    <div>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>Your Addresses</h2>
+                      <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: colors.textSecondary }}>
+                        Add, edit, delete, or set a default address from one place.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={startCreateAddress}
+                      disabled={addressMode !== 'idle' || addresses.length >= ADDRESS_LIMIT}
+                      className="inline-flex items-center justify-center gap-3 px-6 py-4 rounded-full text-[11px] font-black uppercase tracking-[0.3em] shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                      style={{
+                        backgroundColor: colors.primary,
+                        color: 'white',
+                        boxShadow: '0 15px 30px rgba(166, 138, 100, 0.3)'
+                      }}
+                    >
+                      <FaPlus /> Add New Address
+                    </button>
+                  </div>
+
+                  {addressState.status !== 'idle' && (
+                    <div
+                      className={`rounded-2xl border px-6 py-4 text-[11px] font-bold uppercase tracking-widest ${addressState.status === 'success'
+                        ? 'border-green-100 bg-green-50 text-green-700'
+                        : addressState.status === 'error'
+                          ? 'border-red-100 bg-red-50 text-red-700'
+                          : 'border-slate-100 bg-slate-50 text-slate-600'
+                        }`}
+                    >
+                      {addressState.message || (addressState.status === 'loading' ? 'Saving address...' : '')}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="space-y-5">
+                      {addresses.length === 0 ? (
+                        <div className="rounded-[2rem] border p-8 md:p-10 text-center" style={{ borderColor: colors.accent, backgroundColor: colors.pageBg }}>
+                          <p className="text-lg font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>No saved addresses yet</p>
+                          <p className="mt-3 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                            Click Add New Address to create your first saved address.
+                          </p>
+                        </div>
+                      ) : (
+                        addresses.map((address, index) => (
+                          <div
+                            key={address._id}
+                            className="rounded-[2rem] border p-6 md:p-7 bg-white shadow-sm"
+                            style={{ borderColor: address.isDefault ? colors.primary : colors.accent }}
+                          >
+                            <div className="flex items-start justify-between gap-4 mb-5">
+                              <div>
+                                <p className="text-lg font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>
+                                  {address.label || 'Address'}
+                                </p>
+                                {address.isDefault && (
+                                  <span className="mt-2 inline-flex px-3 py-1 rounded-full bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest border border-green-100">
+                                    Default
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>
+                                #{String(index + 1).padStart(2, '0')}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                              <p>{address.addressLine}</p>
+                              <p>{address.taluka}{address.taluka && address.district ? ', ' : ''}{address.district}</p>
+                              <p>{address.city}{address.city && address.state ? ', ' : ''}{address.state} - {address.pincode}</p>
+                            </div>
+
+                            <div className="mt-6 flex flex-wrap gap-3">
+                              {!address.isDefault && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetDefaultAddress(address)}
+                                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+                                  style={{ color: colors.primary, borderColor: colors.accent, backgroundColor: 'white' }}
+                                >
+                                  Make Default
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => startEditAddress(address)}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+                                style={{ color: colors.textMain, borderColor: colors.accent, backgroundColor: colors.pageBg }}
+                              >
+                                <FaEdit /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAddress(address._id)}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+                                style={{ color: '#B42318', borderColor: '#F2C7C4', backgroundColor: '#FFF5F4' }}
+                              >
+                                <FaTrash /> Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div>
+                      {addressMode !== 'idle' ? (
+                        <form
+                          onSubmit={handleAddressSubmit}
+                          className="rounded-[2rem] border p-6 md:p-8 bg-[#FCFAF5] sticky top-8"
+                          style={{ borderColor: colors.accent }}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8 pb-6 border-b" style={{ borderColor: 'rgba(214, 201, 181, 0.35)' }}>
+                            <div>
+                              <h4 className="text-xl font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>
+                                {editingAddressId ? 'Edit Saved Address' : 'Add New Address'}
+                              </h4>
+                              <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: colors.textSecondary }}>
+                                Update the address book entry that checkout will reuse.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={resetAddressForm}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all"
+                              style={{ color: colors.textMain, borderColor: colors.accent, backgroundColor: 'white' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-10">
+                            <div className="space-y-2 md:col-span-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Label</label>
+                              <input
+                                name="label"
+                                type="text"
+                                value={addressForm.label}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="Home"
+                              />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Street Address / Landmark</label>
+                              <input
+                                name="addressLine"
+                                type="text"
+                                value={addressForm.addressLine}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="Flat, House no., Landmark"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Pincode</label>
+                              <input
+                                name="pincode"
+                                type="text"
+                                maxLength="6"
+                                value={addressForm.pincode}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="380054"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Taluka</label>
+                              <input
+                                name="taluka"
+                                type="text"
+                                value={addressForm.taluka}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="Ghatlodia"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>District</label>
+                              <input
+                                name="district"
+                                type="text"
+                                value={addressForm.district}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="Ahmedabad"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>Town / City</label>
+                              <input
+                                name="city"
+                                type="text"
+                                value={addressForm.city}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold transition-all bg-transparent"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                                placeholder="Ahmedabad"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40" style={{ color: colors.textMain }}>State</label>
+                              <select
+                                name="state"
+                                value={addressForm.state}
+                                onChange={handleAddressInputChange}
+                                className="w-full py-4 border-b-2 outline-none text-base font-bold bg-transparent cursor-pointer"
+                                style={{ borderColor: colors.accent, color: colors.textMain }}
+                              >
+                                <option value="">Select State</option>
+                                <option value="Gujarat">Gujarat</option>
+                                <option value="Maharashtra">Maharashtra</option>
+                                <option value="Rajasthan">Rajasthan</option>
+                              </select>
+                            </div>
+
+                            <div className="md:col-span-2 flex items-center gap-3 rounded-2xl border px-5 py-4" style={{ borderColor: colors.accent, backgroundColor: 'white' }}>
+                              <input
+                                id="address-is-default"
+                                name="isDefault"
+                                type="checkbox"
+                                checked={addressForm.isDefault}
+                                onChange={handleAddressInputChange}
+                                className="h-4 w-4 accent-[#A68A64]"
+                              />
+                              <label htmlFor="address-is-default" className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: colors.textMain }}>
+                                Make this the default shipping address
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="pt-10 flex justify-end">
+                            <button
+                              type="submit"
+                              className="px-12 py-5 text-white text-[11px] font-black uppercase tracking-[0.3em] rounded-full shadow-2xl transition-all active:scale-95"
+                              style={{
+                                backgroundColor: colors.primary,
+                                boxShadow: '0 15px 30px rgba(166, 138, 100, 0.3)'
+                              }}
+                            >
+                              {editingAddressId ? 'Update Address' : 'Save Address'}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="rounded-[2rem] border p-8 md:p-10 text-center bg-[#FCFAF5] sticky top-8" style={{ borderColor: colors.accent }}>
+                          <p className="text-xl font-black uppercase tracking-tighter" style={{ color: colors.textMain }}>Add New Address</p>
+                          <p className="mt-3 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                            Click Add New Address to create a new address or select an existing one to edit it.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 /* order tracking */

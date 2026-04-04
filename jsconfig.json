@@ -5,7 +5,8 @@
     "module": "ESNext",
     "moduleResolution": "Node",
     "jsx": "react-jsx",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["Nova/**/*"],
   "exclude": ["**/node_modules", "**/dist", "**/build"]

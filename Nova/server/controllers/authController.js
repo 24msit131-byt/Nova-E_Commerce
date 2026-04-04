@@ -13,6 +13,8 @@ const signToken = (id, role) => {
   });
 };
 
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
 const getTransporter = () => {
   if (process.env.SMTP_HOST && process.env.SMTP_PORT) {
     return nodemailer.createTransport({
@@ -67,7 +69,7 @@ const sendPasswordResetEmail = async ({ email, fullName, resetUrl }) => {
 };
 
 const findAccountByEmail = async (email, withSensitiveFields = false) => {
-  const query = { email };
+  const query = { email: normalizeEmail(email) };
   const projection = withSensitiveFields ? '+password +resetPasswordToken +resetPasswordExpires' : undefined;
 
   let account = await Admin.findOne(query);
@@ -83,6 +85,20 @@ const findAccountByEmail = async (email, withSensitiveFields = false) => {
   }
 
   return { account, role };
+};
+
+const findLoginCandidatesByEmail = async (email) => {
+  const normalizedEmail = normalizeEmail(email);
+
+  const [adminAccount, userAccount] = await Promise.all([
+    Admin.findOne({ email: normalizedEmail }).select('+password'),
+    User.findOne({ email: normalizedEmail }).select('+password'),
+  ]);
+
+  return [
+    adminAccount ? { account: adminAccount, role: 'admin' } : null,
+    userAccount ? { account: userAccount, role: userAccount.role || 'user' } : null,
+  ].filter(Boolean);
 };
 
 export const registerUser = async (req, res) => {
@@ -241,7 +257,7 @@ export const loginUser = async (req, res) => {
   try {
     const rawEmail = req.body?.email;
     const password = req.body?.password;
-    const email = String(rawEmail || '').trim().toLowerCase();
+    const email = normalizeEmail(rawEmail);
 
     // 1) Check if email and password exist
     if (!email || !password) {
@@ -251,16 +267,21 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    // 2) Check if account exists in Admin or User collection
-    let account = await Admin.findOne({ email }).select('+password');
-    let role = 'admin';
+    // 2) Check both collections and accept the record whose password matches.
+    const loginCandidates = await findLoginCandidatesByEmail(email);
 
-    if (!account) {
-      account = await User.findOne({ email }).select('+password');
-      role = account?.role || 'user';
+    let account = null;
+    let role = 'user';
+
+    for (const candidate of loginCandidates) {
+      if (await candidate.account.correctPassword(password, candidate.account.password)) {
+        account = candidate.account;
+        role = candidate.role;
+        break;
+      }
     }
 
-    if (!account || !(await account.correctPassword(password, account.password))) {
+    if (!account) {
       return res.status(401).json({
         status: 'fail',
         message: 'Incorrect email or password'

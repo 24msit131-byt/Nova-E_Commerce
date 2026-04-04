@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,25 +13,26 @@ const seedAdmin = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI || process.env.DATABASE);
 
-        const email = '';
-        const password = '';
+        const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        const password = String(process.env.ADMIN_PASSWORD || '').trim();
+        const fullName = String(process.env.ADMIN_FULL_NAME || 'System Admin').trim() || 'System Admin';
 
-        const existingAdmin = await Admin.findOne({ email });
-        if (existingAdmin) {
-            console.log('Admin already exists');
-            process.exit();
+        if (!email || !password) {
+            throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set before seeding the admin account');
         }
 
-        const newAdmin = new Admin({
-            fullName: 'System Admin',
-            email,
-            password, // Will be hashed by pre-save hook
-        });
+        const existingAdmin = await Admin.findOne({ email });
+        const admin = existingAdmin || new Admin({ email });
 
-        await newAdmin.save();
-        console.log('Admin created successfully');
+        admin.fullName = fullName;
+        admin.email = email;
+        admin.password = password;
+
+        await admin.save();
+
+        console.log(existingAdmin ? 'Admin updated successfully' : 'Admin created successfully');
         console.log('Email:', email);
-        console.log('Password:', password);
+        console.log('Password: [hidden]');
         process.exit();
     } catch (err) {
         console.error('Error seeding admin:', err.message);
