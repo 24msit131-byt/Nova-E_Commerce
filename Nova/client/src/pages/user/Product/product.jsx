@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { FaFilter, FaSearch, FaStar, FaChevronDown, FaThLarge, FaList, FaBoxOpen, FaRupeeSign } from 'react-icons/fa';
-import { HiOutlineShoppingBag } from 'react-icons/hi2';
+import { HiOutlineShoppingBag, HiOutlineHeart } from 'react-icons/hi2';
 import api from '../../../services/api';
 import { useCart } from '../../../context/CartContext.jsx';
+import { AuthContext } from '../../../context/AuthContext.jsx';
 import Footer from '../../../components/Footer';
+import { toast } from 'react-toastify';
 
 const Products = () => {
     const { addToCart } = useCart();
+    const { user } = useContext(AuthContext);
+    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
     const [selectedCategories, setSelectedCategories] = useState([]);
@@ -75,6 +79,21 @@ const Products = () => {
         setSelectedPriceRange('');
         setSelectedRating(0);
         setInStockOnly(false);
+    };
+
+    const handleAddToWishlist = async (productId) => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
+        try {
+            await api.post('/wishlist/add', { productId });
+            toast.success('Saved to wishlist');
+            window.dispatchEvent(new Event('wishlist-updated'));
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to save to wishlist');
+        }
     };
 
     const hasActiveFilters = Boolean(selectedPriceRange || selectedRating || inStockOnly);
@@ -323,13 +342,23 @@ const Products = () => {
                                 {filteredProducts.map((item) => (
                                     <div key={item._id} className="group bg-white rounded-[2.5rem] overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-[#E0D8CC]/30">
                                         {/* Image Section */}
-                                        <Link to={`/product/${item._id}`} className="relative aspect-[4/4] overflow-hidden block">
-                                            <img
-                                                src={item.images[0]}
-                                                alt={item.name}
-                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                            />
-                                        </Link>
+                                        <div className="relative aspect-[4/4] overflow-hidden block">
+                                            <Link to={`/product/${item._id}`} className="block h-full w-full">
+                                                <img
+                                                    src={item.images[0]}
+                                                    alt={item.name}
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                />
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddToWishlist(item._id)}
+                                                className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/95 shadow-lg flex items-center justify-center transition-transform hover:scale-105"
+                                                aria-label="Add to wishlist"
+                                            >
+                                                <HiOutlineHeart size={18} style={{ color: colors.primary }} />
+                                            </button>
+                                        </div>
 
                                         {/* Content Section */}
                                         <div className="p-5 flex flex-col flex-1">

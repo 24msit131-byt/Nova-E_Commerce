@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { HiOutlineShoppingBag, HiOutlineUser, HiChevronDown } from 'react-icons/hi2';
+import { HiOutlineShoppingBag, HiOutlineUser, HiChevronDown, HiOutlineHeart } from 'react-icons/hi2';
 import { HiOutlineSearch, HiOutlineLogout, HiOutlineViewGrid } from 'react-icons/hi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext.jsx';
@@ -15,6 +15,7 @@ const Navbar = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchSuggestions, setSearchSuggestions] = useState([]);
     const [searchProducts, setSearchProducts] = useState([]);
+    const [wishlistCount, setWishlistCount] = useState(0);
     const { user, logout } = useContext(AuthContext);
     const { cartCount } = useCart();
     const navigate = useNavigate();
@@ -51,6 +52,42 @@ const Navbar = () => {
             isMounted = false;
         };
     }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchWishlistCount = async () => {
+            if (!user) {
+                setWishlistCount(0);
+                return;
+            }
+
+            try {
+                const response = await api.get('/wishlist');
+                if (isMounted) {
+                    setWishlistCount(response.data?.data?.wishlist?.products?.length || 0);
+                }
+            } catch (error) {
+                if (isMounted) {
+                    setWishlistCount(0);
+                }
+                console.error('Navbar wishlist load error:', error?.response?.data || error.message);
+            }
+        };
+
+        fetchWishlistCount();
+
+        const handleWishlistUpdated = () => {
+            fetchWishlistCount();
+        };
+
+        window.addEventListener('wishlist-updated', handleWishlistUpdated);
+
+        return () => {
+            isMounted = false;
+            window.removeEventListener('wishlist-updated', handleWishlistUpdated);
+        };
+    }, [user]);
 
     useEffect(() => {
         const query = searchTerm.trim().toLowerCase();
@@ -251,9 +288,26 @@ const Navbar = () => {
                                     color: colors.textMain
                                 }}
                             >
-                                <HiOutlineSearch className="text-xl" />
+                                <HiOutlineSearch className="text-xl group-hover:scale-110 transition-transform" />
                             </button>
                         </div>
+
+                        <Link
+                            to="/wishlist"
+                            className="relative p-2.5 rounded-full transition-colors group"
+                            style={{ color: location.pathname.startsWith('/wishlist') ? colors.primary : colors.textMain }}
+                            aria-label="Wishlist"
+                        >
+                            <HiOutlineHeart className="text-xl group-hover:scale-110 transition-transform" />
+                            {wishlistCount > 0 && (
+                                <span
+                                    className="absolute top-1 right-1 h-4 w-4 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2"
+                                    style={{ backgroundColor: colors.primary, ringColor: colors.secondary }}
+                                >
+                                    {wishlistCount}
+                                </span>
+                            )}
+                        </Link>
 
                         <Link
                             to="/cart"
@@ -261,9 +315,9 @@ const Navbar = () => {
                             style={{ color: colors.textMain }}
                         >
                             <HiOutlineShoppingBag className="text-xl group-hover:scale-110 transition-transform" />
-                            {cartCount > 0 && (
+                            {cartCount> 0 && (
                                 <span
-                                    className="absolute top-1 right-1 h-5 w-5 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2"
+                                    className="absolute top-1 right-1 h-4 w-4 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2"
                                     style={{ backgroundColor: colors.primary, ringColor: colors.secondary }}
                                 >
                                     {cartCount}

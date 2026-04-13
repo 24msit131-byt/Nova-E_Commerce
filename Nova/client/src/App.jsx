@@ -18,6 +18,8 @@ import Checkout from "./pages/user/Checkout/Checkout";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import TermsAndService from "./components/TermsAndService";
 import ShippingInfo from "./components/ShippingInfo";
+import Wishlist from "./components/Wishlist";
+import ProtectedRoute from "./components/ProtectedRoute";
 import ManageProducts from "./pages/Admin/ManageProducts/ManageProducts";
 import ManageOrders from "./pages/Admin/ManageOrders/ManageOrders";
 import ManageUsers from "./pages/Admin/ManageUsers/ManageUsers";
@@ -51,6 +53,7 @@ export default function App() {
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
         <Route path="/products" element={<Products />} />
         <Route path="/product/:id" element={<ProductDetails />} />
         <Route path="/aboutus" element={<AboutUs />} />

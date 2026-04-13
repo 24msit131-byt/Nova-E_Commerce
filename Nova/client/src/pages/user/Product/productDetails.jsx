@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
     FaStar, FaTruck, FaShieldAlt, FaSync, FaShoppingCart,
     FaBolt, FaChevronRight, FaRegCreditCard, FaStore, FaMinus, FaPlus, FaUserCircle
 } from 'react-icons/fa';
+import { HiOutlineHeart } from 'react-icons/hi2';
 import api from '../../../services/api';
+import { AuthContext } from '../../../context/AuthContext';
 import { useCart } from '../../../context/CartContext';
 import Footer from '../../../components/Footer';
 import { toast } from 'react-toastify';
@@ -13,6 +15,7 @@ const ProductDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { user } = useContext(AuthContext);
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [product, setProduct] = useState(null);
@@ -89,6 +92,21 @@ const ProductDetails = () => {
         navigate('/checkout');
     };
 
+    const handleAddToWishlist = async () => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
+        try {
+            await api.post('/wishlist/add', { productId: product._id });
+            toast.success('Saved to wishlist');
+            window.dispatchEvent(new Event('wishlist-updated'));
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to save to wishlist');
+        }
+    };
+
     const goToProductDetails = (productId) => {
         if (!productId) return;
         navigate(`/product/${productId}`);
@@ -158,12 +176,20 @@ const ProductDetails = () => {
                             ))}
                         </div>
                         {/* Main Image Box (Full container coverage) */}
-                        <div className="flex-1 aspect-[4/5] rounded-[2.5rem] overflow-hidden border bg-white shadow-xl group" style={{ borderColor: colors.accent }}>
+                        <div className="flex-1 aspect-[4/5] rounded-[2.5rem] overflow-hidden border bg-white shadow-xl group relative" style={{ borderColor: colors.accent }}>
                             <img
                                 src={product.images?.[selectedImage] || 'https://via.placeholder.com/800'}
                                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                                 alt={product.name}
                             />
+                            <button
+                                type="button"
+                                onClick={handleAddToWishlist}
+                                className="absolute top-4 right-4 h-11 w-11 rounded-full bg-white/95 shadow-lg flex items-center justify-center transition-transform hover:scale-105"
+                                aria-label="Add to wishlist"
+                            >
+                                <HiOutlineHeart className="text-base" style={{ color: colors.primary }} />
+                            </button>
                         </div>
                     </div>
 
