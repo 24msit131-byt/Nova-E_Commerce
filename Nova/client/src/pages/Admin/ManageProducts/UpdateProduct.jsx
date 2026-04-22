@@ -5,12 +5,23 @@ import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 import { toast } from 'react-toastify';
 
+const PRODUCT_CATEGORIES = [
+    'Kitchen Care',
+    'Bathroom Care',
+    'Floor Care',
+    'Windows Care',
+    'Laundry Care',
+    'Pet Care',
+    'Lifestyle & Home'
+];
+
 const UpdateProduct = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [media, setMedia] = useState([]); // Array of { url, file }
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [categoryOptions, setCategoryOptions] = useState(PRODUCT_CATEGORIES);
     const [formData, setFormData] = useState({
         name: '',
         category: '',
@@ -23,8 +34,23 @@ const UpdateProduct = () => {
     useEffect(() => {
         const fetchProduct = async () => {
             try {
-                const { data } = await api.get(`/products/${id}`);
+                const [productResponse, categoriesResponse] = await Promise.all([
+                    api.get(`/products/${id}`),
+                    api.get('/categories'),
+                ]);
+
+                const { data } = productResponse;
                 const product = data.data;
+                const fetchedCategories = (categoriesResponse.data?.data || [])
+                    .map((category) => category.name)
+                    .filter(Boolean);
+
+                const availableCategories = [...fetchedCategories];
+                if (product.category && !availableCategories.some((category) => category.toLowerCase() === product.category.toLowerCase())) {
+                    availableCategories.push(product.category);
+                }
+
+                setCategoryOptions(availableCategories.length > 0 ? availableCategories : PRODUCT_CATEGORIES);
                 setFormData({
                     name: product.name,
                     category: product.category,
@@ -143,10 +169,9 @@ const UpdateProduct = () => {
                                         name="category" value={formData.category} onChange={handleInputChange}
                                         className="w-full py-3 border-b-2 border-[#FAF7F2] focus:border-[#A68A64] outline-none text-sm font-bold text-[#4A4036] bg-transparent cursor-pointer"
                                     >
-                                        <option value="Kitchen Care">Kitchen Care</option>
-                                        <option value="Bathroom Care">Bathroom Care</option>
-                                        <option value="Floor Care">Floor Care</option>
-                                        <option value="Windows Care">Windows Care</option>
+                                        {categoryOptions.map((category) => (
+                                            <option key={category} value={category}>{category}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="space-y-2">

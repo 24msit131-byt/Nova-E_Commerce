@@ -131,7 +131,7 @@ To send reset links directly to user email, configure these in server `.env`:
 
 ## Order Confirmation Notifications
 
-After a checkout succeeds, Nova sends an order confirmation email and SMS in the background.
+After a checkout succeeds, Nova sends an order confirmation email and SMS in the background. It also sends a separate admin alert email containing the full order snapshot and the customer details.
 
 ### Email Content
 - Thank-you note for the customer
@@ -140,6 +140,49 @@ After a checkout succeeds, Nova sends an order confirmation email and SMS in the
 - Total amount
 - Item summary
 - Shipping location when available
+
+### Admin Email Content
+- Full order details
+- Customer details
+- Shipping address
+- Line items
+- Payment result details when available
+- Return request details when available
+
+### Admin Email Recipients
+Nova resolves admin recipients from saved admin accounts first, including both `Admin` records and `User` records with the admin role.
+
+You can also use these environment variables as explicit fallback recipients:
+- `ADMIN_ORDER_EMAIL`
+- `ORDER_NOTIFICATION_EMAIL`
+- `ADMIN_EMAIL`
+
+If no admin recipient is found, the order still succeeds and the admin email step is skipped.
+
+## Order Cancellation Notifications
+
+When an order is cancelled, Nova sends the same full-detail email format to both the customer and the admin recipient(s).
+
+### Cancellation Triggers
+- Admin updates the order status to `Cancelled`
+- Customer cancels a pending Razorpay order before payment is captured
+- Customer cancels any order before delivery through the order tracking page
+
+### User Cancellation Route
+- `POST /api/v1/orders/:id/cancel`
+- Body: `reason`
+- Requirement: the order must belong to the logged-in user and must not already be delivered
+
+### Cancellation Email Content
+- Full order details
+- Customer details
+- Shipping address
+- Line items
+- Payment result details when available
+- Return request details when available
+- Cancellation reason when provided
+
+The customer email is sent to the order owner, and the admin email is sent to the resolved admin recipient list.
 
 ### SMS Content
 - Short confirmation message
@@ -158,10 +201,16 @@ If the SMS variables are not configured, the order still succeeds and the SMS st
 
 Customers can request a return after an order is marked as delivered.
 
+When a customer submits a return request, an email is sent to the admin recipient list only. When an admin approves or rejects the request, an email is sent to the customer only.
+
 ### Customer Request
 - `POST /api/v1/orders/:id/return-request`
 - Body: `reason`
 - Requirement: the order must belong to the logged-in user and must already be delivered.
+
+### Return Notifications
+- Admin receives the return request with order and customer details
+- Customer receives the admin decision with order and return request details
 
 ### Admin Review
 - `PATCH /api/v1/orders/:id/return-request`

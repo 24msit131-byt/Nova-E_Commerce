@@ -1,5 +1,5 @@
 import express from 'express';
-import { createOrder, createRazorpayOrder, cancelRazorpayPayment, verifyRazorpayPayment, getAdminOrders, getMyOrders, getOrderById, updateOrderStatus, updateOrderDetails, requestOrderReturn, updateOrderReturnRequest } from '../controllers/orderController.js';
+import { createOrder, createRazorpayOrder, cancelRazorpayPayment, cancelMyOrder, verifyRazorpayPayment, getAdminOrders, getMyOrders, getOrderById, updateOrderStatus, updateOrderDetails, requestOrderReturn, updateOrderReturnRequest } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { requireAdmin } from '../middlewares/roleMiddleware.js';
 
@@ -9,6 +9,7 @@ router.post('/', protect, createOrder);
 router.post('/razorpay/create', protect, createRazorpayOrder);
 router.post('/razorpay/verify', protect, verifyRazorpayPayment);
 router.post('/razorpay/cancel', protect, cancelRazorpayPayment);
+router.post('/:id/cancel', protect, cancelMyOrder);
 router.post('/:id/return-request', protect, requestOrderReturn);
 router.get('/my', protect, getMyOrders);
 router.get('/admin', protect, requireAdmin, getAdminOrders);

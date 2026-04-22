@@ -12,6 +12,7 @@ import bannerRoutes from './routes/bannerRoutes.js';
 import promoCodeRoutes from './routes/promoCodeRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/v1/banner', bannerRoutes);
 app.use('/api/v1/promos', promoCodeRoutes);
 app.use('/api/v1/contact', contactRoutes);
 app.use('/api/v1/wishlist', wishlistRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 app.get("/", (req, res) => {
 	res.send(

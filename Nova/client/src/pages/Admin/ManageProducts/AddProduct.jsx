@@ -5,11 +5,24 @@ import AdminSidebar from '../../../components/AdminSlider';
 import api from '../../../services/api';
 import { toast } from 'react-toastify';
 
+const PRODUCT_CATEGORIES = [
+    'Kitchen Care',
+    'Bathroom Care',
+    'Floor Care',
+    'Windows Care',
+    'Laundry Care',
+    'Pet Care',
+    'Lifestyle & Home'
+];
+
 const AddProduct = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [images, setImages] = useState([]);
     const [previewImages, setPreviewImages] = useState([]);
+    const [categoryOptions, setCategoryOptions] = useState(PRODUCT_CATEGORIES);
+    const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
+    const [customCategory, setCustomCategory] = useState('');
     const [formData, setFormData] = useState({
         name: '',
         category: '',
@@ -21,6 +34,67 @@ const AddProduct = () => {
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const { data } = await api.get('/categories');
+                const fetchedCategories = (data.data || [])
+                    .map((category) => category.name)
+                    .filter(Boolean);
+
+                if (fetchedCategories.length > 0) {
+                    setCategoryOptions(fetchedCategories);
+                }
+            } catch (error) {
+                console.error('Failed to fetch categories:', error);
+            }
+        };
+
+        fetchCategories();
+    }, []);
+
+    const handleAddCustomCategory = async () => {
+        const nextCategory = customCategory.trim();
+
+        if (!nextCategory) {
+            toast.error('Enter a category name first.');
+            return;
+        }
+
+        const exists = categoryOptions.some(
+            (category) => category.toLowerCase() === nextCategory.toLowerCase()
+        );
+
+        if (exists) {
+            toast.info('That category already exists.');
+            setFormData((prev) => ({
+                ...prev,
+                category: categoryOptions.find((category) => category.toLowerCase() === nextCategory.toLowerCase()) || nextCategory,
+            }));
+            setShowCustomCategoryInput(false);
+            setCustomCategory('');
+            return;
+        }
+
+        try {
+            const { data } = await api.post('/categories', { name: nextCategory });
+            const savedCategoryName = data?.data?.name || nextCategory;
+
+            setCategoryOptions((prev) =>
+                prev.some((category) => category.toLowerCase() === savedCategoryName.toLowerCase())
+                    ? prev
+                    : [...prev, savedCategoryName]
+            );
+            setFormData((prev) => ({ ...prev, category: savedCategoryName }));
+            setShowCustomCategoryInput(false);
+            setCustomCategory('');
+            toast.success(`Added ${savedCategoryName} category.`);
+        } catch (error) {
+            const message = error.response?.data?.message || 'Unable to add category';
+            toast.error(message);
+        }
     };
 
     const handleImageUpload = (e) => {
@@ -118,17 +192,43 @@ const AddProduct = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em]">Category Selection</label>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <label className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em]">Category Selection</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCustomCategoryInput((prev) => !prev)}
+                                            className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em] hover:text-[#4A4036] transition-colors"
+                                        >
+                                            {showCustomCategoryInput ? 'Close' : 'Add Another Category'}
+                                        </button>
+                                    </div>
                                     <select
                                         name="category" value={formData.category} onChange={handleInputChange}
                                         className="w-full py-3 border-b-2 border-[#FAF7F2] focus:border-[#A68A64] outline-none text-sm font-bold text-[#4A4036] bg-transparent cursor-pointer"
                                     >
                                         <option value="">Select Category</option>
-                                        <option value="kitchen">Kitchen Care</option>
-                                        <option value="bathroom">Bathroom Care</option>
-                                        <option value="floor">Floor Care</option>
-                                        <option value="lifestyle">Lifestyle & Home</option>
+                                        {categoryOptions.map((category) => (
+                                            <option key={category} value={category}>{category}</option>
+                                        ))}
                                     </select>
+                                    {showCustomCategoryInput && (
+                                        <div className="pt-3 space-y-3">
+                                            <input
+                                                type="text"
+                                                value={customCategory}
+                                                onChange={(e) => setCustomCategory(e.target.value)}
+                                                placeholder="Enter new category name"
+                                                className="w-full py-3 border-b-2 border-[#FAF7F2] focus:border-[#A68A64] outline-none text-sm font-bold text-[#4A4036] transition-all placeholder:text-[#E0D8CC]"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleAddCustomCategory}
+                                                className="w-full bg-[#4A4036] text-white py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-[#A68A64] transition-all"
+                                            >
+                                                Save New Category
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em]">Visibility Status</label>

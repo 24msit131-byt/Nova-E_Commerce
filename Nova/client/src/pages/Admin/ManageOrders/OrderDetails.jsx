@@ -272,6 +272,24 @@ const OrderDetail = () => {
                             >
                                 Update Notes
                             </button>
+
+                            {status === 'Cancelled' && order.cancelReason && (
+                                <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-5">
+                                    <p className="text-[9px] font-black text-red-700 uppercase tracking-[0.2em] mb-3">
+                                        Cancellation Reason
+                                    </p>
+                                    <p className="text-sm font-medium text-red-800 leading-relaxed">
+                                        {order.cancelReason}
+                                    </p>
+                                    {(order.cancelledBy || order.cancelledAt) && (
+                                        <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-red-600/80">
+                                            {order.cancelledBy ? `Cancelled by ${order.cancelledBy}` : ''}
+                                            {order.cancelledBy && order.cancelledAt ? ' • ' : ''}
+                                            {order.cancelledAt ? `At ${new Date(order.cancelledAt).toLocaleString('en-IN')}` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Return Request */}

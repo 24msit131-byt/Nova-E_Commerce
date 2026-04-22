@@ -34,6 +34,16 @@ const Products = () => {
         deepBg: '#2C2621'       // Deep Grounded Brown
     };
 
+    const [categoryFilters, setCategoryFilters] = useState([
+        'Kitchen Care',
+        'Bathroom Care',
+        'Floor Care',
+        'Windows Care',
+        'Laundry Care',
+        'Pet Care',
+        'Lifestyle & Home'
+    ]);
+
     useEffect(() => {
         const fetchProducts = async () => {
             try {
@@ -50,11 +60,30 @@ const Products = () => {
     }, []);
 
     useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const { data } = await api.get('/categories');
+                const fetchedCategories = (data.data || [])
+                    .map((category) => category.name)
+                    .filter(Boolean);
+
+                if (fetchedCategories.length > 0) {
+                    setCategoryFilters(fetchedCategories);
+                }
+            } catch (error) {
+                console.error('Failed to load categories:', error);
+            }
+        };
+
+        fetchCategories();
+    }, []);
+
+    useEffect(() => {
         setSearchQuery(searchParams.get("search") || "");
     }, [searchParams]);
 
     const handleCategoryChange = (cat) => {
-        const categoryValue = cat.toLowerCase().replace(' care', '');
+        const categoryValue = cat.toLowerCase().trim();
         if (selectedCategories.includes(categoryValue)) {
             setSelectedCategories(selectedCategories.filter(c => c !== categoryValue));
         } else {
@@ -104,7 +133,7 @@ const Products = () => {
         const category = (product.category || '').toLowerCase();
         const matchesSearch = name.includes(searchQuery.toLowerCase()) || category.includes(searchQuery.toLowerCase());
 
-        const productCat = category.replace(' care', '').trim();
+        const productCat = category.trim().toLowerCase();
         const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(productCat);
 
         const price = Number(product.price) || 0;
@@ -532,7 +561,7 @@ onChange={handleSearchInput}
                 <FaFilter className="mr-2 text-indigo-600" /> Filter By Category
             </h3>
             <div className="space-y-3">
-                {['Kitchen', 'Floor', 'Windows', 'Bathroom'].map((cat) => (
+                {categoryFilters.map((cat) => (
                     <label key={cat} className="flex items-center group cursor-pointer">
                         <input
                             type="checkbox"
@@ -540,7 +569,7 @@ onChange={handleSearchInput}
                             checked={selectedCategories.includes(cat.toLowerCase())}
                             onChange={() => handleCategoryChange(cat)}
                         />
-                        <span className={`ml-3 text-[13px] font-bold transition-colors ${selectedCategories.includes(cat.toLowerCase()) ? 'text-indigo-600' : 'text-slate-500 group-hover:text-slate-900'}`}>{cat} Care</span>
+                        <span className={`ml-3 text-[13px] font-bold transition-colors ${selectedCategories.includes(cat.toLowerCase()) ? 'text-indigo-600' : 'text-slate-500 group-hover:text-slate-900'}`}>{cat}</span>
                     </label>
                 ))}
                 {selectedCategories.length > 0 && (

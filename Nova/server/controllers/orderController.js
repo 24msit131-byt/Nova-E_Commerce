@@ -3,7 +3,8 @@ import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
 import PromoCode from '../models/PromoCode.js';
 import Product from '../models/Product.js';
-import { sendOrderNotifications } from '../utils/orderNotifications.js';
+import User from '../models/User.js';
+import { sendOrderNotifications, sendOrderCancellationNotifications, sendReturnRequestNotifications, sendReturnDecisionNotifications } from '../utils/orderNotifications.js';
 
 const rollbackStock = async (updatedItems) => {
     if (!updatedItems.length) return;
@@ -414,8 +415,11 @@ export const cancelRazorpayPayment = async (req, res) => {
             });
         }
 
+        order.status = 'Cancelled';
         await restoreStockForOrder(order.orderItems);
         await Order.findByIdAndDelete(order._id);
+
+        void sendOrderCancellationNotifications({ order, user: req.user });
 
         res.status(200).json({
             success: true,
@@ -423,6 +427,75 @@ export const cancelRazorpayPayment = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// @desc    Cancel my order before delivery
+// @route   POST /api/v1/orders/:id/cancel
+// @access  Private
+export const cancelMyOrder = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        if (String(order.user) !== String(req.user._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not allowed to cancel this order'
+            });
+        }
+
+        if (order.isDelivered || String(order.status) === 'Delivered') {
+            return res.status(400).json({
+                success: false,
+                message: 'Delivered orders cannot be cancelled'
+            });
+        }
+
+        if (String(order.status) === 'Cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'This order is already cancelled'
+            });
+        }
+
+        const cancelReason = String(req.body?.reason || '').trim();
+
+        if (!cancelReason) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a cancellation reason'
+            });
+        }
+
+        await restoreStockForOrder(order.orderItems);
+
+        order.status = 'Cancelled';
+        order.cancelReason = cancelReason;
+        order.cancelledAt = new Date();
+        order.cancelledBy = 'user';
+
+        await order.save();
+
+        const customerUser = await User.findById(order.user).select('fullName email phoneNumber');
+        void sendOrderCancellationNotifications({ order, user: customerUser || req.user });
+
+        res.status(200).json({
+            success: true,
+            data: order,
+            message: 'Order cancelled successfully'
+        });
+    } catch (error) {
+        res.status(400).json({
             success: false,
             message: error.message
         });
@@ -484,6 +557,9 @@ export const requestOrderReturn = async (req, res) => {
         };
 
         await order.save();
+
+        const customerUser = await User.findById(order.user).select('fullName email phoneNumber');
+        void sendReturnRequestNotifications({ order, user: customerUser || req.user });
 
         res.status(200).json({
             success: true,
@@ -555,6 +631,11 @@ export const updateOrderReturnRequest = async (req, res) => {
         order.returnRequest.processedAt = new Date();
 
         await order.save();
+
+        if (['Approved', 'Rejected'].includes(status)) {
+            const customerUser = await User.findById(order.user).select('fullName email phoneNumber');
+            void sendReturnDecisionNotifications({ order, user: customerUser || { email: '', fullName: '' }, decision: status });
+        }
 
         res.status(200).json({
             success: true,
@@ -648,6 +729,11 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         await order.save();
+
+        if (previousStatus !== 'Cancelled' && status === 'Cancelled') {
+            const customerUser = await User.findById(order.user).select('fullName email phoneNumber');
+            void sendOrderCancellationNotifications({ order, user: customerUser || { email: '', fullName: '' } });
+        }
 
         res.status(200).json({
             success: true,

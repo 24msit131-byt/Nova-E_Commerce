@@ -118,6 +118,15 @@ const Profile = () => {
     message: ''
   });
 
+  const [cancelModal, setCancelModal] = useState({
+    isOpen: false,
+    orderId: null,
+    orderLabel: '',
+    reason: '',
+    status: 'idle',
+    message: ''
+  });
+
   // Review Modal State
   const [reviewModal, setReviewModal] = useState({
     isOpen: false,
@@ -480,6 +489,60 @@ const Profile = () => {
       status: 'idle',
       message: ''
     });
+  };
+
+  const handleOpenCancelModal = (order) => {
+    const shortOrderId = `#${order._id?.slice(-8)?.toUpperCase() || 'N/A'}`;
+
+    setCancelModal({
+      isOpen: true,
+      orderId: order._id,
+      orderLabel: shortOrderId,
+      reason: '',
+      status: 'idle',
+      message: ''
+    });
+  };
+
+  const handleCloseCancelModal = () => {
+    setCancelModal({
+      isOpen: false,
+      orderId: null,
+      orderLabel: '',
+      reason: '',
+      status: 'idle',
+      message: ''
+    });
+  };
+
+  const handleCancelSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!cancelModal.reason.trim()) {
+      setCancelModal(prev => ({ ...prev, status: 'error', message: 'Please share a cancellation reason.' }));
+      return;
+    }
+
+    setCancelModal(prev => ({ ...prev, status: 'loading', message: '' }));
+
+    try {
+      await api.post(`/orders/${cancelModal.orderId}/cancel`, {
+        reason: cancelModal.reason
+      });
+
+      setCancelModal(prev => ({ ...prev, status: 'success', message: 'Order cancelled successfully.' }));
+      await fetchOrders();
+
+      setTimeout(() => {
+        handleCloseCancelModal();
+      }, 2000);
+    } catch (error) {
+      setCancelModal(prev => ({
+        ...prev,
+        status: 'error',
+        message: error.response?.data?.message || 'Failed to cancel order.'
+      }));
+    }
   };
 
   const handleReturnSubmit = async (e) => {
@@ -984,6 +1047,7 @@ const Profile = () => {
                     const { activeStep, isCancelled } = getStepState(order.status);
                     const returnState = getReturnRequestState(order);
                     const canRequestReturn = order.status === 'Delivered' && (!order.returnRequest || ['None', 'Rejected'].includes(order.returnRequest.status));
+                    const canCancelOrder = !['Delivered', 'Cancelled'].includes(order.status);
                     const shortOrderId = `#${order._id?.slice(-8)?.toUpperCase() || 'N/A'}`;
 
                     return (
@@ -1114,17 +1178,37 @@ const Profile = () => {
                             )}
                           </div>
 
-                          {canRequestReturn && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenReturnModal(order)}
-                              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border"
-                              style={{ color: colors.primary, borderColor: colors.accent, backgroundColor: 'white' }}
-                            >
-                              <FaExchangeAlt /> Request Return
-                            </button>
-                          )}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {canCancelOrder && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCancelModal(order)}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border"
+                                style={{ color: '#DC2626', borderColor: '#FECACA', backgroundColor: '#FFF1F2' }}
+                              >
+                                <FaTimes /> Cancel Order
+                              </button>
+                            )}
+
+                            {canRequestReturn && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReturnModal(order)}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border"
+                                style={{ color: colors.primary, borderColor: colors.accent, backgroundColor: 'white' }}
+                              >
+                                <FaExchangeAlt /> Request Return
+                              </button>
+                            )}
+                          </div>
                         </div>
+
+                        {order.status === 'Cancelled' && order.cancelReason && (
+                          <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-5 py-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-700 mb-2">Cancellation Reason</p>
+                            <p className="text-sm font-medium text-red-800 leading-relaxed">{order.cancelReason}</p>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1240,6 +1324,55 @@ const Profile = () => {
                 style={{ backgroundColor: colors.deepBg }}
               >
                 {returnModal.status === 'loading' ? 'Submitting...' : 'Submit Return Request'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {cancelModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[24px] p-8 relative shadow-2xl border" style={{ borderColor: '#FECACA' }}>
+            <button
+              onClick={handleCloseCancelModal}
+              className="absolute top-6 right-6 text-gray-400 hover:text-gray-800 transition-colors"
+            >
+              <FaTimes size={20} />
+            </button>
+
+            <h3 className="text-2xl font-black uppercase tracking-tighter mb-2" style={{ color: colors.textMain }}>Cancel Order</h3>
+            <p className="text-sm opacity-60 font-bold mb-6" style={{ color: colors.textSecondary }}>
+              Order {cancelModal.orderLabel}
+            </p>
+
+            <form onSubmit={handleCancelSubmit} className="space-y-6">
+              {cancelModal.message && (
+                <div className={`p-4 rounded-xl text-sm font-bold ${cancelModal.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {cancelModal.message}
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 mb-2 block" style={{ color: colors.textMain }}>
+                  Cancellation Reason
+                </label>
+                <textarea
+                  required
+                  value={cancelModal.reason}
+                  onChange={(e) => setCancelModal(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Tell us why you want to cancel this order..."
+                  className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-red-400 transition-colors min-h-[140px] resize-none"
+                  style={{ color: colors.textMain }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={cancelModal.status === 'loading' || cancelModal.status === 'success'}
+                className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-sm transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: '#DC2626' }}
+              >
+                {cancelModal.status === 'loading' ? 'Cancelling...' : 'Confirm Cancellation'}
               </button>
             </form>
           </div>

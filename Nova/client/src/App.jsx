@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -21,6 +22,8 @@ import ShippingInfo from "./components/ShippingInfo";
 import Wishlist from "./components/Wishlist";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ManageProducts from "./pages/Admin/ManageProducts/ManageProducts";
+import ManageCategories from "./pages/Admin/ManageCategories/ManageCategories";
+import ManageReviews from "./pages/Admin/ManageReviews/ManageReviews";
 import ManageOrders from "./pages/Admin/ManageOrders/ManageOrders";
 import ManageUsers from "./pages/Admin/ManageUsers/ManageUsers";
 import ManageAdmins from "./pages/Admin/ManageUsers/ManageAdmins";
@@ -29,6 +32,7 @@ import UpdateProduct from "./pages/Admin/ManageProducts/UpdateProduct";
 import OrderDetails from "./pages/Admin/ManageOrders/OrderDetails";
 import Banner from "./pages/Admin/Banner/Banner";
 import PromoCode from "./pages/Admin/PromoCode/promoCode";
+import { cancelPendingGetRequests } from "./services/api";
 
 
 
@@ -40,6 +44,10 @@ export default function App() {
   const isAdminPath = location.pathname.startsWith("/admin");
   const isResetPasswordPath = location.pathname.startsWith("/reset-password/");
   const shouldHideNavbar = hideNavbarPaths.includes(location.pathname) || isAdminPath || isResetPasswordPath;
+
+  useEffect(() => {
+    cancelPendingGetRequests();
+  }, [location.pathname]);
 
   return (
     <div>
@@ -64,6 +72,8 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/products" element={<ManageProducts />} />
+        <Route path="/admin/categories" element={<ManageCategories />} />
+        <Route path="/admin/reviews" element={<ManageReviews />} />
         <Route path="/admin/orders" element={<ManageOrders />} />
         <Route path="/admin/users" element={<ManageUsers />} />
         <Route path="/admin/admins" element={<ManageAdmins />} />

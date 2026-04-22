@@ -94,3 +94,99 @@ export const getProductReviews = async (req, res) => {
         });
     }
 };
+
+export const getAllReviewsAdmin = async (req, res) => {
+    try {
+        const reviews = await Review.find()
+            .populate('user', 'fullName email')
+            .populate('product', 'name category price rating reviews images')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: reviews.length,
+            data: reviews,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error while fetching reviews',
+        });
+    }
+};
+
+export const updateReviewAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rating, comment } = req.body;
+
+        const review = await Review.findById(id);
+
+        if (!review) {
+            return res.status(404).json({
+                success: false,
+                message: 'Review not found',
+            });
+        }
+
+        if (rating !== undefined) {
+            const nextRating = Number(rating);
+            if (!Number.isFinite(nextRating) || nextRating < 1 || nextRating > 5) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Rating must be between 1 and 5',
+                });
+            }
+            review.rating = nextRating;
+        }
+
+        if (comment !== undefined) {
+            review.comment = String(comment).trim();
+        }
+
+        await review.save();
+        await Review.calculateAverageRating(review.product);
+
+        const updatedReview = await Review.findById(id)
+            .populate('user', 'fullName email')
+            .populate('product', 'name category price rating reviews images');
+
+        res.status(200).json({
+            success: true,
+            message: 'Review updated successfully',
+            data: updatedReview,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error while updating review',
+        });
+    }
+};
+
+export const deleteReviewAdmin = async (req, res) => {
+    try {
+        const review = await Review.findById(req.params.id);
+
+        if (!review) {
+            return res.status(404).json({
+                success: false,
+                message: 'Review not found',
+            });
+        }
+
+        const productId = review.product;
+        await review.deleteOne();
+        await Review.calculateAverageRating(productId);
+
+        res.status(200).json({
+            success: true,
+            message: 'Review deleted successfully',
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error while deleting review',
+        });
+    }
+};
