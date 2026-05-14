@@ -11,6 +11,11 @@ const productSchema = new mongoose.Schema({
         required: [true, 'Please provide product category'],
         trim: true
     },
+    packSize: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     price: {
         type: Number,
         required: [true, 'Please provide product price'],

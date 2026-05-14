@@ -405,6 +405,10 @@ const Products = () => {
                                                 <h4 className="text-[#4A4036] font-bold text-xl mb-1 line-clamp-1">{item.name}</h4>
                                             </Link>
 
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A68A64] mb-2">
+                                                {item.packSize || 'Standard Size'}
+                                            </p>
+
                                             <p className="text-[#756A5E] text-xs leading-relaxed line-clamp-2 opacity-60 mb-4">
                                                 {item.description || "Artisanally crafted with pure ingredients for a curated and minimalist home experience."}
                                             </p>

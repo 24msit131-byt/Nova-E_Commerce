@@ -7,6 +7,11 @@ import { AuthContext } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import api from '../services/api.js';
 
+const isCanceledRequest = (error) =>
+    error?.code === 'ERR_CANCELED' ||
+    error?.name === 'CanceledError' ||
+    error?.message === 'canceled';
+
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
@@ -37,11 +42,17 @@ const Navbar = () => {
 
         const fetchSearchProducts = async () => {
             try {
-                const response = await api.get('/products');
+                const response = await api.get('/products', {
+                    metadata: { skipAutoCancel: true }
+                });
                 if (isMounted) {
                     setSearchProducts(response.data?.data || []);
                 }
             } catch (error) {
+                if (isCanceledRequest(error)) {
+                    return;
+                }
+
                 console.error('Navbar search load error:', error?.response?.data || error.message);
             }
         };
@@ -68,6 +79,10 @@ const Navbar = () => {
                     setWishlistCount(response.data?.data?.wishlist?.products?.length || 0);
                 }
             } catch (error) {
+                if (isCanceledRequest(error)) {
+                    return;
+                }
+
                 if (isMounted) {
                     setWishlistCount(0);
                 }

@@ -54,7 +54,15 @@ const getCloudinaryPublicIdFromUrl = (imageUrl) => {
 // @access  Private/Admin
 export const createProduct = async (req, res) => {
     try {
-        const { name, category, price, stock, description, status, images } = req.body;
+        const { name, category, packSize, price, stock, description, status, images } = req.body;
+        const normalizedPackSize = typeof packSize === 'string' ? packSize.trim() : '';
+
+        if (!normalizedPackSize) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a liquid volume or pack size such as 500ml or 1L.'
+            });
+        }
 
         let imageUrls = [];
 
@@ -78,6 +86,7 @@ export const createProduct = async (req, res) => {
         const product = await Product.create({
             name,
             category,
+            packSize: normalizedPackSize,
             price: Number(price),
             stock: Number(stock),
             description,
@@ -215,7 +224,8 @@ export const updateProduct = async (req, res) => {
             });
         }
 
-        const { name, category, price, stock, description, status, existingImages } = req.body;
+        const { name, category, packSize, price, stock, description, status, existingImages } = req.body;
+        const normalizedPackSize = typeof packSize === 'string' ? packSize.trim() : packSize;
 
         let imageUrls = [];
 
@@ -255,6 +265,7 @@ export const updateProduct = async (req, res) => {
             {
                 name,
                 category,
+                packSize: normalizedPackSize || product.packSize || '',
                 price: price ? Number(price) : product.price,
                 stock: stock ? Number(stock) : product.stock,
                 description,

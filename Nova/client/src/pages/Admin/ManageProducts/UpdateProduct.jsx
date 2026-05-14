@@ -15,6 +15,8 @@ const PRODUCT_CATEGORIES = [
     'Lifestyle & Home'
 ];
 
+const LIQUID_SIZE_OPTIONS = ['250ml', '500ml', '750ml', '1L', '2L', '5L'];
+
 const UpdateProduct = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -25,6 +27,7 @@ const UpdateProduct = () => {
     const [formData, setFormData] = useState({
         name: '',
         category: '',
+        packSize: '',
         price: '',
         stock: '',
         description: '',
@@ -54,6 +57,7 @@ const UpdateProduct = () => {
                 setFormData({
                     name: product.name,
                     category: product.category,
+                    packSize: product.packSize || '',
                     price: product.price,
                     stock: product.stock,
                     description: product.description,
@@ -92,6 +96,7 @@ const UpdateProduct = () => {
             const formDataToSubmit = new FormData();
             formDataToSubmit.append('name', formData.name);
             formDataToSubmit.append('category', formData.category);
+            formDataToSubmit.append('packSize', formData.packSize);
             formDataToSubmit.append('price', formData.price);
             formDataToSubmit.append('stock', formData.stock);
             formDataToSubmit.append('description', formData.description);
@@ -185,6 +190,24 @@ const UpdateProduct = () => {
                                         <option value="Archived">Archived</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em]">Liquid Volume / Pack Size</label>
+                                <input
+                                    name="packSize"
+                                    list="edit-liquid-pack-sizes"
+                                    type="text"
+                                    value={formData.packSize}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. 500ml or 1L"
+                                    className="w-full py-3 border-b-2 border-[#FAF7F2] focus:border-[#A68A64] outline-none text-sm font-bold text-[#4A4036] transition-all placeholder:text-[#E0D8CC]"
+                                />
+                                <datalist id="edit-liquid-pack-sizes">
+                                    {LIQUID_SIZE_OPTIONS.map((size) => (
+                                        <option key={size} value={size} />
+                                    ))}
+                                </datalist>
                             </div>
 
                             <div className="space-y-2">

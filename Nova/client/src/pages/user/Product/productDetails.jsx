@@ -245,6 +245,8 @@ const ProductDetails = () => {
                             <div className="font-bold">{product.brand}</div>
                             <div className="font-bold opacity-60 uppercase">Space</div>
                             <div className="font-bold">{product.category}</div>
+                            <div className="font-bold opacity-60 uppercase">Pack Size</div>
+                            <div className="font-bold">{product.packSize || 'Standard'}</div>
                             <div className="font-bold opacity-60 uppercase">Composition</div>
                             <div className="font-bold">Plant-Based Formula</div>
                         </div>

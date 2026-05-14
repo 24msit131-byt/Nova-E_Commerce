@@ -15,6 +15,8 @@ const PRODUCT_CATEGORIES = [
     'Lifestyle & Home'
 ];
 
+const LIQUID_SIZE_OPTIONS = ['250ml', '500ml', '750ml', '1L', '2L', '5L'];
+
 const AddProduct = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -26,6 +28,7 @@ const AddProduct = () => {
     const [formData, setFormData] = useState({
         name: '',
         category: '',
+        packSize: '',
         price: '',
         stock: '',
         description: '',
@@ -129,9 +132,9 @@ const AddProduct = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const { name, category, description, price, stock } = formData;
+        const { name, category, packSize, description, price, stock } = formData;
 
-        if (!name.trim() || !category.trim() || !description.trim()) {
+        if (!name.trim() || !category.trim() || !packSize.trim() || !description.trim()) {
             toast.error('Please complete the product profile before publishing.');
             return;
         }
@@ -240,6 +243,24 @@ const AddProduct = () => {
                                         <option value="Draft">Internal Draft</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black text-[#A68A64] uppercase tracking-[0.2em]">Liquid Volume / Pack Size</label>
+                                <input
+                                    name="packSize"
+                                    list="liquid-pack-sizes"
+                                    type="text"
+                                    value={formData.packSize}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. 500ml or 1L"
+                                    className="w-full py-3 border-b-2 border-[#FAF7F2] focus:border-[#A68A64] outline-none text-sm font-bold text-[#4A4036] transition-all placeholder:text-[#E0D8CC]"
+                                />
+                                <datalist id="liquid-pack-sizes">
+                                    {LIQUID_SIZE_OPTIONS.map((size) => (
+                                        <option key={size} value={size} />
+                                    ))}
+                                </datalist>
                             </div>
 
                             <div className="space-y-2">

@@ -146,7 +146,12 @@ const ManageProducts = () => {
                               <FaBoxOpen size={20} />
                             )}
                           </div>
-                          <span className="text-sm font-bold text-[#4A4036]">{product.name}</span>
+                          <div>
+                            <span className="block text-sm font-bold text-[#4A4036]">{product.name}</span>
+                            <span className="block text-[10px] font-black uppercase tracking-widest text-[#A68A64]/70 mt-1">
+                              {product.packSize ? `Volume · ${product.packSize}` : 'Volume not set'}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-8 py-6 text-xs font-bold text-[#A68A64] uppercase">{product.category}</td>

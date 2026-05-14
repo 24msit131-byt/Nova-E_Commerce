@@ -97,9 +97,6 @@ const ManageCategories = () => {
             <main className="flex-1 p-6 md:p-10 lg:p-16 overflow-y-auto">
                 <header className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12">
                     <div className="flex items-center gap-5">
-                        <Link to="/admin/products" className="h-12 w-12 bg-white border border-[#E0D8CC] rounded-xl flex items-center justify-center text-[#A68A64] hover:bg-[#FAF7F2] transition-all shadow-sm">
-                            <FaArrowLeft size={14} />
-                        </Link>
                         <div>
                             <h1 className="text-3xl font-bold text-[#4A4036] tracking-tighter uppercase">Product Categories</h1>
                             <p className="text-[#A68A64] text-[10px] font-black uppercase tracking-[0.2em] mt-1">Manage catalog taxonomy and product assignment</p>

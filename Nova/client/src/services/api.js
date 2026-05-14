@@ -12,10 +12,12 @@ const buildRequestKey = (config) => {
 };
 
 const cancelPendingGetRequests = () => {
-  pendingGetRequests.forEach((controller) => {
-    controller.abort();
+	pendingGetRequests.forEach((entry, requestKey) => {
+		if (!entry?.persistent) {
+			entry.controller.abort();
+			pendingGetRequests.delete(requestKey);
+		}
   });
-  pendingGetRequests.clear();
 };
 
 const api = axios.create({
@@ -32,14 +34,17 @@ api.interceptors.request.use((config) => {
 
 	if (method === 'get') {
 		const requestKey = buildRequestKey(config);
-		const previousController = pendingGetRequests.get(requestKey);
+		const previousEntry = pendingGetRequests.get(requestKey);
 
-		if (previousController) {
-			previousController.abort();
+		if (previousEntry?.controller) {
+			previousEntry.controller.abort();
 		}
 
 		const controller = new AbortController();
-		pendingGetRequests.set(requestKey, controller);
+		pendingGetRequests.set(requestKey, {
+			controller,
+			persistent: Boolean(config?.metadata?.skipAutoCancel)
+		});
 		config.signal = controller.signal;
 		config.metadata = { ...(config.metadata || {}), requestKey };
 	}
